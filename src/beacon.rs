@@ -25,6 +25,7 @@ use {
     super::error::CoffeeLdrError,
     std::{
         fmt,
+        sync::Mutex,
         alloc::Layout,
         ffi::{c_void, CStr},
         ptr::{null_mut, null, self},
@@ -42,7 +43,7 @@ const CALLBACK_ERROR: u32 = 0x0d;
 const CALLBACK_OUTPUT_UTF8: u32 = 0x20;
 
 /// Buffer for storing beacon output.
-static mut BEACON_BUFFER: BeaconOutputBuffer = BeaconOutputBuffer::new();
+static mut BEACON_BUFFER: Mutex<BeaconOutputBuffer> = Mutex::new(BeaconOutputBuffer::new());
 
 /// A buffer used for managing and collecting output for the beacon.
 #[repr(C)]
@@ -99,6 +100,11 @@ impl BeaconOutputBuffer {
         let ptr = self.buffer.as_mut_ptr();
         self.buffer.clear(); 
         (ptr, size)
+    }
+
+    /// Cleaning the output.
+    pub fn clear(&mut self) {
+        self.buffer.clear();
     }
 }
 
@@ -206,8 +212,16 @@ pub fn get_function_internal_address(name: &str) -> Result<usize, CoffeeLdrError
 /// # Returns
 ///
 /// - `BeaconOutputBuffer`: A cloned copy of the current output buffer.
-pub fn get_output_data() -> BeaconOutputBuffer {
-    unsafe { BEACON_BUFFER.clone() }
+pub fn get_output_data() -> Option<BeaconOutputBuffer> {
+    unsafe {
+        BEACON_BUFFER.lock().map(|mut beacon| {
+            let output = beacon.clone();
+            
+            beacon.clear();
+            
+            output
+        }).ok()
+    }
 }
 
 /// Allocates a new format buffer with the given size.
@@ -517,13 +531,17 @@ fn BeaconDataLength(data: *const Data) -> c_int {
 /// - `*mut c_char`: A pointer to the output data. Returns `null_mut()` if there is no output.
 fn BeaconGetOutputData(outsize: *mut c_int) -> *mut c_char {
     unsafe {
-        let (ptr, size) = BEACON_BUFFER.get_output();
+        if let Ok(mut beacon) = BEACON_BUFFER.lock() {
+            let (ptr, size) = beacon.get_output();
     
-        if !outsize.is_null() {
-            *outsize = size as c_int;
+            if !outsize.is_null() {
+                *outsize = size as c_int;
+            }
+    
+            ptr
+        } else {
+            null_mut()
         }
-    
-        ptr
     }
 }
 
@@ -536,7 +554,9 @@ fn BeaconGetOutputData(outsize: *mut c_int) -> *mut c_char {
 /// - `len`: The length of the output data.
 fn BeaconOutput(_type: c_int, data: *mut c_char, len: c_int) {
     unsafe {
-        BEACON_BUFFER.append_char(data, len);
+        BEACON_BUFFER.lock().map(|mut buffer| {
+            buffer.append_char(data, len);
+        }).ok();
     }
 }
 
@@ -553,7 +573,9 @@ unsafe extern "C" fn BeaconPrintf(_type: c_int, fmt: *mut c_char, mut args: ...)
     printf_compat::format(fmt, args.as_va_list(), printf_compat::output::fmt_write(&mut str));
     str.push('\0');
 
-    BEACON_BUFFER.append_string(&str);
+    BEACON_BUFFER.lock().map(|mut buffer| {
+        buffer.append_string(&str);
+    }).ok();
 }
 
 /// Reverts the current process token to its original state.

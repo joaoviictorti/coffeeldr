@@ -6,11 +6,11 @@ mod parser;
 mod error;
 
 /// Module exposing the `BeaconPack` structure for packing and manipulating binary data, strings, integers, and buffers.
-pub mod beacon_pack;
+mod beacon_pack;
 /// Re-exporting everything from beacon pack
 pub use beacon_pack::*;
 
 /// Module containing the code that will load the COFF
-pub mod loader;
+mod loader;
 /// Re-exporting everything from loader
 pub use loader::*;
