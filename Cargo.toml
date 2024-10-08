@@ -1,0 +1,36 @@
+[package]
+name = "coffeeldr"
+version = "0.1.0"
+authors = ["João Victor"]
+description = "A COFF (Common Object File Format) loader written in Rust"
+license = "MIT"
+repository = "https://github.com/joaoviictorti/coffeeldr"
+homepage = "https://github.com/joaoviictorti/coffeeldr"
+readme = "README.md"
+keywords = ["coff", "loader", "windows", "rust", "redteam"]
+categories = ["os", "filesystem", "security", "redteam"]
+edition = "2021"
+exclude = [
+    ".gitignore",
+    "cli/",
+    "target/",
+]
+
+[dependencies]
+byteorder = "1.5.0"
+log = "0.4.22"
+printf-compat = "0.1.1"
+scroll = "0.12.0"
+thiserror = "1.0.64"
+
+[dependencies.windows-sys]
+version = "0.59.0"
+features = [
+    "Win32_System_Diagnostics_Debug", 
+    "Win32_System_LibraryLoader", 
+    "Win32_System_Memory", 
+    "Win32_System_SystemInformation", 
+    "Win32_System_SystemServices", 
+    "Win32_System_Threading",
+    "Win32_Security"
+]
