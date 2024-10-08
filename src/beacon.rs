@@ -43,7 +43,7 @@ const CALLBACK_ERROR: u32 = 0x0d;
 const CALLBACK_OUTPUT_UTF8: u32 = 0x20;
 
 /// Buffer for storing beacon output.
-static mut BEACON_BUFFER: Mutex<BeaconOutputBuffer> = Mutex::new(BeaconOutputBuffer::new());
+static BEACON_BUFFER: Mutex<BeaconOutputBuffer> = Mutex::new(BeaconOutputBuffer::new());
 
 /// A buffer used for managing and collecting output for the beacon.
 #[repr(C)]
@@ -213,15 +213,13 @@ pub fn get_function_internal_address(name: &str) -> Result<usize, CoffeeLdrError
 ///
 /// - `BeaconOutputBuffer`: A cloned copy of the current output buffer.
 pub fn get_output_data() -> Option<BeaconOutputBuffer> {
-    unsafe {
-        BEACON_BUFFER.lock().map(|mut beacon| {
-            let output = beacon.clone();
-            
-            beacon.clear();
-            
-            output
-        }).ok()
-    }
+    BEACON_BUFFER.lock().map(|mut beacon| {
+        let output = beacon.clone();
+        
+        beacon.clear();
+        
+        output
+    }).ok()
 }
 
 /// Allocates a new format buffer with the given size.
@@ -553,11 +551,9 @@ fn BeaconGetOutputData(outsize: *mut c_int) -> *mut c_char {
 /// - `data`: A pointer to the output data.
 /// - `len`: The length of the output data.
 fn BeaconOutput(_type: c_int, data: *mut c_char, len: c_int) {
-    unsafe {
-        BEACON_BUFFER.lock().map(|mut buffer| {
-            buffer.append_char(data, len);
-        }).ok();
-    }
+    BEACON_BUFFER.lock().map(|mut buffer| {
+        buffer.append_char(data, len);
+    }).ok();
 }
 
 /// Prints formatted output to an internal buffer.
