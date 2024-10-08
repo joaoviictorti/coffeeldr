@@ -8,7 +8,7 @@ repository = "https://github.com/joaoviictorti/coffeeldr"
 homepage = "https://github.com/joaoviictorti/coffeeldr"
 readme = "README.md"
 keywords = ["coff", "loader", "windows", "rust", "redteam"]
-categories = ["os", "filesystem", "security", "redteam"]
+categories = ["os", "filesystem"]
 edition = "2021"
 exclude = [
     ".gitignore",
