@@ -43,6 +43,9 @@ pub enum CoffeeLdrError {
 
     #[error("Symbol ignored because it lacks the required prefix.")]
     SymbolIgnored,
+
+    #[error("Error reading output")]
+    OutputError,
 }
 
 #[derive(Debug, Error)]

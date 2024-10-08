@@ -187,7 +187,7 @@ impl<'a> CoffeeLdr<'a> {
         }
 
         // Returns the output if available, otherwise, returns an empty response
-        let beacon_output = get_output_data();
+        let beacon_output = get_output_data().ok_or(CoffeeLdrError::OutputError)?;
         if !beacon_output.buffer.is_empty() {
             Ok(beacon_output.to_string())
         } else {
