@@ -1,3 +1,5 @@
 /target
 /cli/target
 /tests/target
+/tests/Cargo.lock
+/cli/Cargo.lock

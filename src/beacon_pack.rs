@@ -17,7 +17,8 @@ impl BeaconPack {
     ///
     /// # Returns
     ///
-    /// - `Result<Vec<u8>, io::Error>`: A vector containing the size and the buffer data, or an error if writing fails.
+    /// * `Ok(Vec<u8>)` - A vector containing the size and the buffer data.
+    /// * `Err(io::Error)` - An error if writing fails.
     pub fn getbuffer(&self) -> Result<Vec<u8>, io::Error> {
         let mut buf = Vec::new();
         buf.write_u32::<LittleEndian>(self.size)?;
@@ -30,26 +31,29 @@ impl BeaconPack {
     ///
     /// # Arguments
     ///
-    /// - `short`: The 2-byte integer to be added to the buffer.
+    /// * `short` - The 2-byte integer to be added to the buffer.
     ///
     /// # Returns
     ///
-    /// - `Result<(), io::Error>`: Ok if the short value is added successfully, or an error if writing fails.
+    /// * `Ok(())` - If the short value is added successfully.
+    /// * `Err(io::Error)` - An error if writing fails.
     pub fn addshort(&mut self, short: i16) -> Result<(), io::Error> {
         self.buffer.write_i16::<LittleEndian>(short)?;
         self.size += 2;
         
         Ok(())
     }
+
     /// Adds a 4-byte integer to the buffer.
     ///
     /// # Arguments
     ///
-    /// - `int`: The 4-byte integer to be added to the buffer.
+    /// * `int` - The 4-byte integer to be added to the buffer.
     ///
     /// # Returns
     ///
-    /// - `Result<(), io::Error>`: Ok if the integer is added successfully, or an error if writing fails.
+    /// * `Ok(())` - If the integer is added successfully.
+    /// * `Err(io::Error)` - An error if writing fails.
     pub fn addint(&mut self, int: i32) -> Result<(), io::Error> {
         self.buffer.write_i32::<LittleEndian>(int)?;
         self.size += 4;
@@ -63,16 +67,19 @@ impl BeaconPack {
     ///
     /// # Arguments
     ///
-    /// - `s`: The UTF-8 string to be added to the buffer.
+    /// * `s` - The UTF-8 string to be added to the buffer.
     ///
     /// # Returns
     ///
-    /// - `Result<(), io::Error>`: Ok if the string is added successfully, or an error if writing fails.
+    /// * `Ok(())` - If the string is added successfully.
+    /// * `Err(io::Error)` - An error if writing fails.
     pub fn addstr(&mut self, s: &str) -> Result<(), io::Error> {
         let s_bytes = s.as_bytes();
         let length = s_bytes.len() as u32 + 1;
         self.buffer.write_u32::<LittleEndian>(length)?;
         self.buffer.write_all(s_bytes)?;
+
+        // Null-termination
         self.buffer.write_u8(0)?;
         self.size += 4 + s_bytes.len() as u32 + 1;
 
@@ -85,11 +92,12 @@ impl BeaconPack {
     ///
     /// # Arguments
     ///
-    /// - `s`: The wide string (UTF-16) to be added to the buffer.
+    /// * `s` - The wide string (UTF-16) to be added to the buffer.
     ///
     /// # Returns
     ///
-    /// - `Result<(), io::Error>`: Ok if the wide string is added successfully, or an error if writing fails.
+    /// * `Ok(())` - If the wide string is added successfully.
+    /// * `Err(io::Error)` - An error if writing fails.
     pub fn addwstr(&mut self, s: &str) -> Result<(), io::Error> {
         let s_wide: Vec<u16> = s.encode_utf16().collect();
         let length = (s_wide.len() as u32 * 2) + 2;
@@ -109,11 +117,12 @@ impl BeaconPack {
     ///
     /// # Arguments
     ///
-    /// - `data`: A slice of bytes representing the binary data.
+    /// * `data` - A slice of bytes representing the binary data.
     ///
     /// # Returns
     ///
-    /// - `Result<(), io::Error>`: Ok if the binary data is added successfully, or an error if writing fails.
+    /// * `Ok(())` - If the binary data is added successfully.
+    /// * `Err(io::Error)` - An error if writing fails.
     pub fn addbin(&mut self, data: &[u8]) -> Result<(), io::Error> {
         let length = data.len() as u32;
         self.buffer.write_u32::<LittleEndian>(length)?;
@@ -135,7 +144,7 @@ impl Default for BeaconPack {
     ///
     /// # Returns
     ///
-    /// - `Self`: A default-initialized `BeaconPack`.
+    /// * A default-initialized `BeaconPack`.
     fn default() -> Self {
         Self {
             buffer: Vec::new(),

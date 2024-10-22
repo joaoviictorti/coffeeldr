@@ -1,16 +1,5 @@
 use {
     log::{debug, info, warn},
-    crate::{
-        error::{CoffError, CoffeeLdrError}, 
-        parser::{
-            Coff, CoffMachine, CoffSource,
-            IMAGE_RELOCATION, IMAGE_SYMBOL
-        },
-        beacon::{
-            get_output_data,
-            get_function_internal_address, 
-        },
-    },
     std::{
         cell::RefCell,
         ffi::c_void, 
@@ -18,9 +7,21 @@ use {
         collections::HashMap,
         ptr::{
             null_mut, read_unaligned,
-            write_unaligned, copy_nonoverlapping,
+            write_unaligned,
         },
     }, 
+};
+
+use crate::{
+    error::{CoffError, CoffeeLdrError}, 
+    parser::{
+        Coff, CoffMachine, CoffSource,
+        IMAGE_RELOCATION, IMAGE_SYMBOL
+    },
+    beacon::{
+        get_output_data,
+        get_function_internal_address, 
+    },
 };
 
 use windows_sys::Win32::{
@@ -67,7 +68,7 @@ impl<'a> Default for CoffeeLdr<'a> {
     ///
     /// # Returns
     ///
-    /// - `Self`: A default-initialized `CoffeeLdr`.
+    /// * A default-initialized `CoffeeLdr`.
     fn default() -> Self {
         Self {
             coff: Coff::default(),
@@ -82,13 +83,13 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Arguments
     ///
-    /// - `source`: A generic input that can be either a file or a memory buffer containing the COFF data. 
+    /// * `source` - A generic input that can be either a file or a memory buffer containing the COFF data. 
     ///   This is converted into a `CoffSource`.
     ///
     /// # Returns
     ///
-    /// - `Result<Self, CoffeeLdrError>`: Returns a new instance of `CoffeeLdr` if the COFF source is successfully processed, 
-    ///   or an error of type `CoffeeLdrError` if initialization fails.
+    /// * `Ok(Self)` - If the COFF source is successfully processed, returning a new `CoffeeLdr` instance.
+    /// * `Err(CoffeeLdrError)` - If an error occurs during processing.
     /// 
     /// # Examples
     ///
@@ -147,14 +148,14 @@ impl<'a> CoffeeLdr<'a> {
     /// 
     /// # Arguments
     /// 
-    /// - `entry`: A string slice representing the entry point of the COFF file. This is the symbol name where execution begins.
-    /// - `args`: Optional pointer to an argument list (`*mut u8`) passed to the entry point. If `None`, no arguments are passed.
-    /// - `argc`: An optional `usize` representing the count of arguments passed through `args`. If `None`, the argument count is considered zero.
+    /// * `entry` - A string slice representing the entry point of the COFF file. This is the symbol name where execution begins.
+    /// * `args` - Optional pointer to an argument list (`*mut u8`) passed to the entry point. If `None`, no arguments are passed.
+    /// * `argc` - An optional `usize` representing the count of arguments passed through `args`. If `None`, the argument count is considered zero.
     /// 
     /// # Returns
     /// 
-    /// - `Result<(), CoffeeLdrError>`: On success, returns `Ok(())`. If an error occurs during the execution of the COFF file, 
-    ///   it returns an appropriate `CoffeeLdrError`.
+    /// * `Ok(String)` - Returns the output of the COFF file execution as a `String` if the execution succeeds.
+    /// * `Err(CoffeeLdrError)` - Returns an error if execution fails, wrapped in `CoffeeLdrError`.
     ///
     /// # Examples
     /// 
@@ -199,7 +200,8 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Returns
     ///
-    /// - `Result<(), CoffeeLdrError>`: Returns `Ok(())` in case of success or a specific error in case of failure.
+    /// * `Ok(())` - If the environment is prepared successfully.
+    /// * `Err(CoffeeLdrError)` - If any error occurs during preparation, returns a specific `CoffeeLdrError`.
     fn prepare(&self) -> Result<(), CoffeeLdrError> {
 
         // Checks that the COFF architecture is compatible with the system
@@ -249,16 +251,17 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Arguments
     ///
-    /// - `reloc_addr`: A pointer to the location in memory where the relocation will be applied.
-    /// - `function_address`: The address of the function or symbol being relocated, or `null` if not applicable.
-    /// - `function_map`: A pointer to the function map, used when resolving external symbols.
-    /// - `relocation`: A reference to the `IMAGE_RELOCATION` struct, which contains the relocation entry details.
-    /// - `symbol`: A reference to the `IMAGE_SYMBOL` struct, representing the symbol being relocated.
+    /// * `reloc_addr` - A pointer to the location in memory where the relocation will be applied.
+    /// * `function_address` - The address of the function or symbol being relocated, or `null` if not applicable.
+    /// * `function_map` - A pointer to the function map, used when resolving external symbols.
+    /// * `relocation` - A reference to the `IMAGE_RELOCATION` struct, which contains the relocation entry details.
+    /// * `symbol` - A reference to the `IMAGE_SYMBOL` struct, representing the symbol being relocated.
     ///
     /// # Returns
     ///
-    /// - `Result<(), CoffeeLdrError>`: Returns `Ok(())` if the relocation was successfully processed, 
-    ///   or an error if an unsupported or invalid relocation type is encountered.
+    /// * `Ok(())` - If the relocation was successfully processed.
+    /// * `Err(CoffeeLdrError)` - If an unsupported or invalid relocation type is encountered,
+    ///   an error is returned indicating the type of relocation that caused the failure.
     fn process_relocation(
         &self, 
         reloc_addr: *mut c_void, 
@@ -358,7 +361,8 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Returns
     ///
-    /// - `Result<(), CoffeeLdrError>`: Returns `Ok(())` if successful or an error if there was a problem adjusting the permissions.
+    /// * `Ok(())` - If all section permissions were adjusted successfully.
+    /// * `Err(CoffeeLdrError)` - If an error occurs while adjusting permissions for any section.
     fn adjust_permissions(&self) -> Result<(), CoffeeLdrError> {
         self.section_map.borrow()
             .iter()
@@ -370,7 +374,8 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Returns
     ///
-    /// - `Result<Vec<SectionMap>, CoffeeLdrError>`: A vector of loaded `SectionMap` structs, or an error if memory allocation fails.
+    /// * `Ok(Vec<SectionMap>)` - A vector of `SectionMap` structs representing the loaded sections.
+    /// * `Err(CoffeeLdrError)` - If memory allocation fails, it returns an error containing the error code from the OS.
     fn alloc_bof_memory(&self) -> Result<Vec<SectionMap>, CoffeeLdrError> {
         let size = self.coff.size();
         let address = unsafe {
@@ -394,7 +399,8 @@ impl<'a> CoffeeLdr<'a> {
     /// 
     /// # Returns
     /// 
-    /// - `Result<(), CoffeeLdrError>`: `Ok(())` if the architecture matches the system, or an error if it is not supported.
+    /// * `Ok(())` - If the COFF architecture matches the system's architecture.
+    /// * `Err(CoffeeLdrError)` - If there is a mismatch between the COFF and system architectures.
     #[inline] 
     fn check_architecture(&self) -> Result<(), CoffeeLdrError> {
         match self.coff.arch {
@@ -423,7 +429,9 @@ impl<'a> CoffeeLdr<'a> {
 /// Implements the `Drop` trait to release memory when `CoffeeLdr` goes out of scope.
 impl<'a> Drop for CoffeeLdr<'a> {
     fn drop(&mut self) {
+        // Iterate over each section in the section map
         for section in self.section_map.borrow().iter() {
+            // Release memory if the base pointer is not null
             if !section.base.is_null() {
                 unsafe {
                     VirtualFree(section.base, 0, MEM_RELEASE);
@@ -431,6 +439,7 @@ impl<'a> Drop for CoffeeLdr<'a> {
             }
         }
 
+        // Release memory for the function map if the address pointer is not null
         if !self.function_map.borrow().address.is_null() {
             unsafe {
                 VirtualFree(*self.function_map.borrow().address, 0, MEM_RELEASE);
@@ -454,12 +463,13 @@ impl FunctionMap {
     ///
     /// # Arguments
     /// 
-    /// - `coff`: A reference to the COFF file that contains the symbols to be resolved.
+    /// * `coff` - A reference to the COFF file that contains the symbols to be resolved.
     ///
     /// # Returns
     /// 
-    /// - `Result<(HashMap<String, usize>, FunctionMap), CoffeeLdrError>`: A tuple with resolved symbols and function addresses, 
-    ///   or an error if memory allocation fails.
+    /// * `Ok((HashMap<String, usize>, FunctionMap))` - A tuple containing the resolved symbols and 
+    ///   function map, with each symbol's name mapped to its resolved address.
+    /// * `Err(CoffeeLdrError)` - If memory allocation fails or symbol resolution exceeds the limit.
     fn new(coff: &Coff) -> Result<(HashMap<String, usize>, FunctionMap), CoffeeLdrError> {
         let symbols = Self::process_symbols(coff)?;
         let address = unsafe {
@@ -482,13 +492,12 @@ impl FunctionMap {
     ///
     /// # Arguments
     /// 
-    /// - `coff`: A reference to the COFF file whose symbols are to be processed.
+    /// * `coff` - A reference to the COFF file whose symbols are to be processed.
     ///
     /// # Returns
     /// 
-    /// - `Result<HashMap<String, usize>, CoffeeLdrError>`: A map of symbol names to their resolved addresses, 
-    ///   or an error if an error occurs during symbol resolution, such as exceeding the maximum 
-    ///   number of symbols or failing to resolve an address.
+    /// * `Ok(HashMap<String, usize>)` - A map of symbol names to their resolved addresses.
+    /// * `Err(CoffeeLdrError)` - If symbol resolution fails or the number of symbols exceeds the limit.
     fn process_symbols(coff: &Coff) -> Result<HashMap<String, usize>, CoffeeLdrError> {
         let mut functions = HashMap::with_capacity(MAX_SYMBOLS);
 
@@ -511,13 +520,13 @@ impl FunctionMap {
     ///
     /// # Arguments
     /// 
-    /// - `name`: The name of the symbol to resolve.
-    /// - `coff`: A reference to the COFF file (used to determine the architecture).
+    /// * `name` - The name of the symbol to resolve.
+    /// * `coff` - A reference to the COFF file (used to determine the architecture).
     ///
     /// # Returns
     /// 
-    /// - `Result<usize, CoffeeLdrError>`: The resolved address of the symbol, or an error
-    ///   if the symbol cannot be found or if any error occurs during resolution.
+    /// * `Ok(usize)` - The resolved address of the symbol.
+    /// * `Err(CoffeeLdrError)` - If the symbol cannot be found or resolution fails.
     fn resolve_symbol_address(name: &str, coff: &Coff) -> Result<usize, CoffeeLdrError> {
         debug!("Attempting to resolve address for symbol: {}", name);
         let prefix = match coff.arch { 
@@ -567,7 +576,7 @@ impl Default for FunctionMap {
     ///
     /// # Returns
     ///
-    /// - `Self`: A default-initialized `FunctionMap`.
+    /// * A default-initialized `FunctionMap`.
     fn default() -> Self {
         Self { address: null_mut() }
     }
@@ -594,12 +603,12 @@ impl SectionMap {
     ///
     /// # Arguments
     ///
-    /// - `virt_addr`: Virtual memory address where the sections will be copied.
-    /// - `coff`: Coff structure that will take the information from the sections.
+    /// * `virt_addr` - Virtual memory address where the sections will be copied.
+    /// * `coff` - Coff structure that will take the information from the sections.
     /// 
     /// # Returns
     /// 
-    /// - `Vec<SectionMap>`: Returns a vector of the SectionMap structure.
+    /// * A vector containing the mapping of each section.
     fn copy_sections(virt_addr: *mut c_void, coff: &Coff) -> Vec<SectionMap> {
         unsafe {
             let sections = &coff.sections;
@@ -610,7 +619,7 @@ impl SectionMap {
                     let size = section.SizeOfRawData as usize;
                     let address = coff.buffer.as_ptr().add(section.PointerToRawData as usize);
                     let name = Coff::get_section_name(section);
-                    copy_nonoverlapping(address, sec_base as *mut u8, size);
+                    std::ptr::copy_nonoverlapping(address, sec_base as *mut u8, size);
 
                     debug!("Copying section: {}", name);
                     let section_map = SectionMap { base: sec_base, size, characteristics: section.Characteristics, name };
@@ -624,9 +633,10 @@ impl SectionMap {
     
     /// Set the memory permissions for each section loaded.
     ///
-    /// # Returnss
+    /// # Returns
     ///
-    /// - `Result<(), CoffeeLdrError>`: Returns `Ok(())` if successful or an error if there was a problem adjusting the permissions.
+    /// * `Ok(())` - If the permissions were adjusted successfully.
+    /// * `Err(CoffeeLdrError)` - If an error occurs while adjusting permissions.
     fn adjust_permissions(&self) -> Result<(), CoffeeLdrError> {
         info!("Adjusting memory permissions for section: Name = {}, Address = {:?}, Size = {}, Characteristics = 0x{:X}", 
             self.name, self.base, self.size, self.characteristics

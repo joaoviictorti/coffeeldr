@@ -2,7 +2,7 @@
 
 use {
     log::{warn, debug},
-    super::error::CoffError,  
+    super::error::CoffError,
     std::ffi::{c_void, CStr},
     scroll::{ctx::TryFromCtx, Endian, Pread, LE},
 };
@@ -40,7 +40,7 @@ impl<'a> Default for Coff<'a> {
     ///
     /// # Returns
     ///
-    /// - `Self`: A default-initialized `Coff`.
+    /// * A default-initialized `Coff`.
     fn default() -> Self {
         Self {
             file_header: IMAGE_FILE_HEADER::default(),
@@ -57,11 +57,12 @@ impl<'a> Coff<'a> {
     /// 
     /// # Arguments
     /// 
-    /// - `buffer`: Buffer of the Coff file to be analyzed.
+    /// * `buffer` - Buffer of the Coff file to be analyzed.
     /// 
     /// # Returns
     /// 
-    /// - `Result<Self, CoffError>`: A parsed `Coff` structure, or an error if the buffer cannot be parsed.
+    /// * `Ok(Self)` - Returns a `Coff` instance if parsing succeeds.
+    /// * `Err(CoffError)` - If parsing fails due to an invalid buffer or file structure.
     pub fn from_buffer(buffer: &'a [u8]) -> Result<Self, CoffError> {
 
         // Parse the file
@@ -74,11 +75,12 @@ impl<'a> Coff<'a> {
     ///
     /// # Arguments
     ///
-    /// - `buffer`: Buffer of the Coff file to be analyzed.
+    /// * `buffer` - Buffer of the Coff file to be analyzed.
     ///
     /// # Returns
     /// 
-    /// - `Result<Self, CoffError>`: A parsed `Coff` structure, or an error if the buffer is invalid or the parsing fails.
+    /// * `Ok(Self)` - If the buffer is successfully parsed into a `Coff` structure.
+    /// * `Err(CoffError)` - If parsing fails due to invalid file structure or errors in the buffer.
     fn parse(buffer: &'a [u8]) -> Result<Self, CoffError> {        
         debug!("Parsing COFF file header, buffer size: {}", buffer.len());
 
@@ -133,11 +135,12 @@ impl<'a> Coff<'a> {
     ///
     /// # Arguments
     ///
-    /// - `file_header`: The COFF file header.
+    /// * `file_header` - The COFF file header.
     ///
     /// # Returns
     /// 
-    /// - `Result<CoffMachine, CoffError>`: The machine architecture of the COFF file (`X64` or `X32`), or an error if the architecture is not supported.
+    /// * `Ok(CoffMachine)` - The COFF architecture (`X64` or `X32`).
+    /// * `Err(CoffError)` - If the architecture is not supported.
     #[inline]
     fn validate_architecture(file_header: IMAGE_FILE_HEADER) -> Result<CoffMachine, CoffError> {
         match file_header.Machine {
@@ -154,7 +157,7 @@ impl<'a> Coff<'a> {
     /// 
     /// # Returns
     /// 
-    /// - `usize`: The total aligned size of the image.
+    /// * The total aligned size of the COFF image.
     pub fn size(&self) -> usize {
         let length: usize = self.sections
             .iter()
@@ -183,11 +186,11 @@ impl<'a> Coff<'a> {
     ///
     /// # Arguments
     ///
-    /// - `section`: A reference to an `IMAGE_SECTION_HEADER`.
+    /// * `section` - A reference to an `IMAGE_SECTION_HEADER`.
     ///
     /// # Returns
     /// 
-    /// - `Vec<IMAGE_RELOCATION>`: A vector containing the relocations for the section.
+    /// * A vector of relocation entries for the specified section.
     pub fn get_relocations(&self, section: &IMAGE_SECTION_HEADER) -> Vec<IMAGE_RELOCATION> {        
         let reloc_offset = section.PointerToRelocations as usize;
         let num_relocs = section.NumberOfRelocations as usize;
@@ -205,11 +208,11 @@ impl<'a> Coff<'a> {
     ///
     /// # Arguments
     ///
-    /// - `symtbl`: A reference to an `IMAGE_SYMBOL` entry in the symbol table.
+    /// * `symtbl` - A reference to an `IMAGE_SYMBOL` entry in the symbol table.
     ///
     /// # Returns
     /// 
-    /// - `String`: The symbol's name as a `String`. 
+    /// * The symbol's name.
     pub fn get_symbol_name(&self, symtbl: &IMAGE_SYMBOL) -> String {
         unsafe {
             let name = if symtbl.N.ShortName[0] != 0 {
@@ -233,11 +236,11 @@ impl<'a> Coff<'a> {
     /// 
     /// # Arguments
     /// 
-    /// - `page`: The value to be aligned.
+    /// * `page` - The value to be aligned.
     /// 
     /// # Returns
     /// 
-    /// - `usize`: The value aligned to the page size.
+    /// * The page-aligned value.
     pub fn page_align(page: usize) -> usize {
         page + ((0x1000 - (page & (0x1000 - 1))) % 0x1000)
     }
@@ -246,11 +249,11 @@ impl<'a> Coff<'a> {
     ///
     /// # Arguments
     ///
-    /// - `section`: A reference to an `IMAGE_SECTION_HEADER` from which the name will be extracted.
+    /// * `section` - A reference to an `IMAGE_SECTION_HEADER` from which the name will be extracted.
     ///
     /// # Returns
     ///
-    /// - `String`: The section name as a `String`, trimmed of any trailing null characters (`\0`).
+    /// * The section name.
     pub fn get_section_name(section: &IMAGE_SECTION_HEADER) -> String {
         let name_bytes = &section.Name;
         let name = String::from_utf8_lossy(name_bytes);
@@ -261,12 +264,12 @@ impl<'a> Coff<'a> {
     ///
     /// # Arguments
     ///
-    /// - `x`: A 16-bit unsigned integer representing the type to be checked.
+    /// * `x` - A 16-bit unsigned integer representing the type to be checked.
     ///
     /// # Returns
     ///
-    /// - `true`: If `x` represents a function type.
-    /// - `false`: If `x` does not represent a function type.
+    /// * `true` - If the type represents a function.
+    /// * `false` - If the type does not represent a function.
     pub fn is_fcn(x: u16) -> bool {
         (x & 0x30) == (2 << 4)
     }
@@ -296,11 +299,11 @@ impl<'a> From<&'a str> for CoffSource<'a> {
     ///
     /// # Arguments
     ///
-    /// - `file`: Path of the COFF file.
+    /// * `file` - Path of the COFF file.
     ///
     /// # Returns
     ///
-    /// - `CoffSource::File`: The input string will be treated as the path of a COFF file.
+    /// * The input string will be treated as the path of a COFF file.
     fn from(file: &'a str) -> Self {
         CoffSource::File(file)
     }
@@ -311,11 +314,11 @@ impl<'a, const N: usize> From<&'a [u8; N]> for CoffSource<'a> {
     ///
     /// # Arguments
     ///
-    /// - `buffer`: A fixed-size byte array representing the COFF file data.
+    /// * `buffer` - A fixed-size byte array representing the COFF file data.
     ///
     /// # Returns
     ///
-    /// - `CoffSource::Buffer`: The input byte array will be treated as a COFF buffer in memory.
+    /// * The input byte array will be treated as a COFF buffer in memory.
     fn from(buffer: &'a [u8; N]) -> Self {
         CoffSource::Buffer(buffer)
     }
@@ -326,11 +329,11 @@ impl<'a> From<&'a [u8]> for CoffSource<'a> {
     ///
     /// # Arguments
     ///
-    /// - `buffer`: A byte slice representing the COFF file data.
+    /// * `buffer` - A byte slice representing the COFF file data.
     ///
     /// # Returns
     ///
-    /// - `CoffSource::Buffer`: The input byte slice will be treated as a COFF buffer in memory.
+    /// * The input byte slice will be treated as a COFF buffer in memory.
     fn from(buffer: &'a [u8]) -> Self {
         CoffSource::Buffer(buffer)
     }
@@ -367,7 +370,7 @@ impl Default for IMAGE_FILE_HEADER {
     ///
     /// # Returns
     ///
-    /// - `Self`: A default-initialized `IMAGE_FILE_HEADER`.
+    /// * A default-initialized `IMAGE_FILE_HEADER`.
     fn default() -> Self {
         Self {
             Machine: 0,
@@ -389,12 +392,12 @@ impl<'a> TryFromCtx<'a, Endian> for IMAGE_FILE_HEADER {
     ///
     /// # Arguments
     ///
-    /// - `bytes`: A byte slice containing the COFF file data.
-    /// - `_ctx`: The endianness of the data (e.g., little-endian).
+    /// * `bytes` - A byte slice containing the COFF file data.
+    /// * `_ctx` - The endianness of the data (e.g., little-endian).
     ///
     /// # Returns
     ///
-    /// - `Self`: The parsed `IMAGE_FILE_HEADER` and the size read.
+    /// * The parsed `IMAGE_FILE_HEADER` and the size read.
     fn try_from_ctx(bytes: &'a [u8], _ctx: Endian) -> Result<(Self, usize), Self::Error> {
         let file_header = IMAGE_FILE_HEADER {
             Machine: bytes.pread_with(0, LE)?,
@@ -466,12 +469,12 @@ impl<'a> TryFromCtx<'a, Endian> for IMAGE_SYMBOL {
     ///
     /// # Arguments
     ///
-    /// - `bytes`: A byte slice containing the COFF symbol data.
-    /// - `_ctx`: The endianness of the data (e.g., little-endian).
+    /// * `bytes` - A byte slice containing the COFF symbol data.
+    /// * `_ctx` - The endianness of the data (e.g., little-endian).
     ///
     /// # Returns
     ///
-    /// - `Self`: The parsed `IMAGE_SYMBOL` and the size read.
+    /// * The parsed `IMAGE_SYMBOL` and the size read.
     fn try_from_ctx(bytes: &'a [u8], _ctx: Endian) -> Result<(Self, usize), Self::Error> {
         let symbol = IMAGE_SYMBOL {
             N: IMAGE_SYMBOL_0 {
@@ -542,12 +545,12 @@ impl<'a> TryFromCtx<'a, Endian> for IMAGE_SECTION_HEADER {
     ///
     /// # Arguments
     ///
-    /// - `bytes`: A byte slice containing the COFF section header data.
-    /// - `_ctx`: The endianness of the data (e.g., little-endian).
+    /// * `bytes` - A byte slice containing the COFF section header data.
+    /// * `_ctx` - The endianness of the data (e.g., little-endian).
     ///
     /// # Returns
     ///
-    /// - `Self`: The parsed `IMAGE_SECTION_HEADER` and the size read.
+    /// * The parsed `IMAGE_SECTION_HEADER` and the size read.
     fn try_from_ctx(bytes: &'a [u8], _ctx: Endian) -> Result<(Self, usize), Self::Error> {
         let section = IMAGE_SECTION_HEADER {
             Name: bytes.pread_with(0, LE)?,
@@ -599,12 +602,12 @@ impl<'a> TryFromCtx<'a, Endian> for IMAGE_RELOCATION {
     ///
     /// # Arguments
     ///
-    /// - `bytes`: A byte slice containing the COFF relocation data.
-    /// - `_ctx`: The endianness of the data (e.g., little-endian).
+    /// * `bytes` - A byte slice containing the COFF relocation data.
+    /// * `_ctx` - The endianness of the data (e.g., little-endian).
     ///
     /// # Returns
     ///
-    /// - `Self`: The parsed `IMAGE_RELOCATION` and the size read.
+    /// * The parsed `IMAGE_RELOCATION` and the size read.
     fn try_from_ctx(bytes: &'a [u8], _ctx: Endian) -> Result<(Self, usize), Self::Error> {
         let relocation = IMAGE_RELOCATION {
             Anonymous: IMAGE_RELOCATION_0 {
@@ -613,6 +616,7 @@ impl<'a> TryFromCtx<'a, Endian> for IMAGE_RELOCATION {
             SymbolTableIndex: bytes.pread_with(4, LE)?,
             Type: bytes.pread_with(8, LE)?,
         };
+        
         Ok((relocation, size_of::<IMAGE_RELOCATION>()))
     }
 }
