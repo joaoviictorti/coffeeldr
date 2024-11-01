@@ -6,19 +6,19 @@ The tests below cover different usage examples.
 
 There are three main tests:
 
-1. `test_bof_whoami`:
+1. **`test_bof_whoami`**:
 
     Load and execute the file `whoami.x64.o`, This file executes the `whoami` command on the system.
 
-2. `test_bof_ntcreatethread`:
+2. **`test_bof_ntcreatethread`**:
 
     Load and execute the file `ntcreatethread.x64.o`. Pass the arguments such as the `PID` and `Shellcode`.
 
-3. `test_bof_dir`:
+3. **`test_bof_dir`**:
 
     Load and execute the file `dir.x64.o`. Pass the `C:\` directory as an argument and run the dir command to list the contents.
 
-4. `test_buffer_memory`:
+4. **`test_buffer_memory`**:
 
     A simple test of a file in memory.
 

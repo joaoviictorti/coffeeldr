@@ -14,6 +14,7 @@ exclude = [
     ".gitignore",
     "cli/",
     "target/",
+    "tests/",
 ]
 
 [dependencies]
