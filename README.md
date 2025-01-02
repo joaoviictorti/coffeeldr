@@ -47,7 +47,7 @@ To load a COFF file from the filesystem:
 ```rust
 use coffeeldr::CoffeeLdr;
 
-let loader = CoffeeLdr::new("path/to/coff_file.o");
+let mut loader = CoffeeLdr::new("path/to/coff_file.o");
 match loader {
     Ok(ldr) => {
         println!("COFF successfully loaded from file!");
@@ -64,7 +64,7 @@ To load a COFF from an in-memory buffer:
 use coffeeldr::CoffeeLdr;
 
 let coff_data = include_bytes!("path/to/coff_file.o");
-let loader = CoffeeLdr::new(coff_data);
+let mut loader = CoffeeLdr::new(coff_data);
 match loader {
     Ok(ldr) => {
         println!("COFF successfully loaded from buffer!");
@@ -78,7 +78,7 @@ match loader {
 
 Once the COFF file is loaded, you can execute it by specifying the entry point:
 ```rust
-let coffee = CoffeeLdr::new("path/to/coff_file.o").unwrap();
+let mut coffee = CoffeeLdr::new("path/to/coff_file.o").unwrap();
 coffee.run("entry_point_function_name", None, None).unwrap();
 ```
 

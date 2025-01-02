@@ -1,7 +1,6 @@
 use {
     log::{debug, info, warn},
     std::{
-        cell::RefCell,
         ffi::c_void, 
         mem::transmute,
         collections::HashMap,
@@ -57,10 +56,10 @@ pub struct CoffeeLdr<'a> {
     coff: Coff<'a>,
     
     /// Vector mapping the allocated memory sections.
-    section_map: RefCell<Vec<SectionMap>>,
+    section_map: Vec<SectionMap>,
 
     /// Map of functions `FunctionMap`.
-    function_map: RefCell<FunctionMap>
+    function_map: FunctionMap
 }
 
 impl<'a> Default for CoffeeLdr<'a> {
@@ -72,8 +71,8 @@ impl<'a> Default for CoffeeLdr<'a> {
     fn default() -> Self {
         Self {
             coff: Coff::default(),
-            section_map: RefCell::new(Vec::new()),
-            function_map: RefCell::new(FunctionMap::default())
+            section_map: Vec::new(),
+            function_map: FunctionMap::default()
         }
     }
 }
@@ -139,8 +138,8 @@ impl<'a> CoffeeLdr<'a> {
         // Returns the new `CoffeeLdr` object
         Ok(Self {
             coff,
-            section_map: RefCell::new(Vec::new()),
-            function_map: RefCell::new(FunctionMap::default())
+            section_map: Vec::new(),
+            function_map: FunctionMap::default()
         })
     }
 
@@ -168,7 +167,7 @@ impl<'a> CoffeeLdr<'a> {
     ///     Err(err_code) => println!("[!] Error: {:?}", err_code)
     /// }
     /// ```
-    pub fn run(&self, entry: &str, args: Option<*mut u8>, argc: Option<usize>) -> Result<String, CoffeeLdrError> {
+    pub fn run(&mut self, entry: &str, args: Option<*mut u8>, argc: Option<usize>) -> Result<String, CoffeeLdrError> {
         info!("Preparing environment for COFF execution.");
 
         // Prepares the environment to execute the COFF file
@@ -179,7 +178,7 @@ impl<'a> CoffeeLdr<'a> {
             if name == entry && Coff::is_fcn(symbol.Type) {
                 info!("Running COFF file: entry point = {}, args = {:?}, argc = {:?}", name, args, argc);
 
-                let section_addr = self.section_map.borrow()[(symbol.SectionNumber - 1) as usize].base;
+                let section_addr = self.section_map[(symbol.SectionNumber - 1) as usize].base;
                 let entrypoint = unsafe { section_addr.offset(symbol.Value as isize) };
                 let coff_main: CoffMain = unsafe { transmute(entrypoint) };
                 coff_main(args.unwrap_or(null_mut()), argc.unwrap_or(0));
@@ -202,18 +201,17 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// * `Ok(())` - If the environment is prepared successfully.
     /// * `Err(CoffeeLdrError)` - If any error occurs during preparation, returns a specific `CoffeeLdrError`.
-    fn prepare(&self) -> Result<(), CoffeeLdrError> {
-
+    fn prepare(&mut self) -> Result<(), CoffeeLdrError> {
         // Checks that the COFF architecture is compatible with the system
         self.check_architecture()?;
 
         // Allocates memory to load the COFF sections
         let allocated_sections = self.alloc_bof_memory()?;
-        self.section_map.replace(allocated_sections);
-        
+        // self.section_map.replace(allocated_sections);
+        self.section_map = allocated_sections;
         // Resolves external symbols (functions) and maps them to their memory addresses
         let (functions, function_map) = FunctionMap::new(&self.coff)?;
-        self.function_map.replace(function_map);
+        self.function_map = function_map;
 
         // Processes relocations to adjust addresses based on symbols
         let mut index = 0;
@@ -222,13 +220,13 @@ impl<'a> CoffeeLdr<'a> {
 
             for relocation in relocations.iter() {
                 let symbol = &self.coff.symbols[relocation.SymbolTableIndex as usize];       
-                let symbol_reloc_addr = (self.section_map.borrow()[i].base as usize +  unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
+                let symbol_reloc_addr = (self.section_map[i].base as usize +  unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
                 
                 let name = self.coff.get_symbol_name(symbol); 
                 if let Some(function_address) = functions.get(&name).copied() {
                     unsafe { 
                         let function_address = function_address as *mut c_void;
-                        let address = self.function_map.borrow().address.add(index); 
+                        let address = self.function_map.address.add(index); 
                         address.write(function_address);
 
                         self.process_relocation(symbol_reloc_addr, function_address, address, relocation, symbol)?;
@@ -294,7 +292,7 @@ impl<'a> CoffeeLdr<'a> {
                 }
             }
 
-            let section_addr = self.section_map.borrow()[(symbol.SectionNumber - 1) as usize].base;
+            let section_addr = self.section_map[(symbol.SectionNumber - 1) as usize].base;
             match self.coff.arch {
                 CoffMachine::X64 => {
                     match relocation.Type as u32 {
@@ -364,7 +362,7 @@ impl<'a> CoffeeLdr<'a> {
     /// * `Ok(())` - If all section permissions were adjusted successfully.
     /// * `Err(CoffeeLdrError)` - If an error occurs while adjusting permissions for any section.
     fn adjust_permissions(&self) -> Result<(), CoffeeLdrError> {
-        self.section_map.borrow()
+        self.section_map
             .iter()
             .filter(|section| section.size > 0)
             .try_for_each(|section| section.adjust_permissions())
@@ -430,7 +428,7 @@ impl<'a> CoffeeLdr<'a> {
 impl<'a> Drop for CoffeeLdr<'a> {
     fn drop(&mut self) {
         // Iterate over each section in the section map
-        for section in self.section_map.borrow().iter() {
+        for section in self.section_map.iter() {
             // Release memory if the base pointer is not null
             if !section.base.is_null() {
                 unsafe {
@@ -440,9 +438,9 @@ impl<'a> Drop for CoffeeLdr<'a> {
         }
 
         // Release memory for the function map if the address pointer is not null
-        if !self.function_map.borrow().address.is_null() {
+        if !self.function_map.address.is_null() {
             unsafe {
-                VirtualFree(*self.function_map.borrow().address, 0, MEM_RELEASE);
+                VirtualFree(*self.function_map.address, 0, MEM_RELEASE);
             }
         }
     }

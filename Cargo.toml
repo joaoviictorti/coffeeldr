@@ -1,6 +1,6 @@
 [package]
 name = "coffeeldr"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["João Victor"]
 description = "A COFF (Common Object File Format) loader written in Rust"
 license = "MIT"

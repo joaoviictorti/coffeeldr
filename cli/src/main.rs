@@ -139,9 +139,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Run CoffeeLdr
-    let coffee = CoffeeLdr::new(args.bof.as_str()).map_err(|e| format!("{e}"))?;
+    let mut coffee = CoffeeLdr::new(args.bof.as_str()).map_err(|e| format!("{e}"))?;
     match coffee.run(&args.entrypoint, buffer, len) {
-        Ok(result) => println!("Output: \n{result}"),
+        Ok(result) => print!("Output: {result}"),
         Err(err_code) => error!("{:?}", err_code),
     }
 
