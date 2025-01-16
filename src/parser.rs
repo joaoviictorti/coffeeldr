@@ -64,10 +64,8 @@ impl<'a> Coff<'a> {
     /// * `Ok(Self)` - Returns a `Coff` instance if parsing succeeds.
     /// * `Err(CoffError)` - If parsing fails due to an invalid buffer or file structure.
     pub fn from_buffer(buffer: &'a [u8]) -> Result<Self, CoffError> {
-
         // Parse the file
         let coff = Self::parse(buffer)?;
-
         Ok(coff)
     }
 
@@ -111,16 +109,16 @@ impl<'a> Coff<'a> {
 
         // A vector of COFF symbols
         let mut symbol_offset = file_header.PointerToSymbolTable as usize;
-        let symbols: Vec<IMAGE_SYMBOL> = (0..num_symbols as usize).map(|_| {
+        let symbols  = (0..num_symbols as usize).map(|_| {
             let symbol: IMAGE_SYMBOL = buffer.gread_with(&mut symbol_offset, LE).map_err(|_| CoffError::InvalidCoffSymbolsFile)?;
             Ok(symbol)
-        }).collect::<Result<Vec<_>, CoffError>>()?;
+        }).collect::<Result<Vec<IMAGE_SYMBOL>, CoffError>>()?;
         
         // A vector of COFF sections
-        let sections: Vec<IMAGE_SECTION_HEADER> = (0..num_sections as usize).map(|_| {
+        let sections = (0..num_sections as usize).map(|_| {
             let section: IMAGE_SECTION_HEADER = buffer.gread_with(&mut offset, LE).map_err(|_| CoffError::InvalidCoffSectionFile)?;
             Ok(section)
-        }).collect::<Result<Vec<_>, CoffError>>()?;
+        }).collect::<Result<Vec<IMAGE_SECTION_HEADER>, CoffError>>()?;
 
         Ok(Self {
             file_header,

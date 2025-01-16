@@ -207,8 +207,8 @@ impl<'a> CoffeeLdr<'a> {
 
         // Allocates memory to load the COFF sections
         let allocated_sections = self.alloc_bof_memory()?;
-        // self.section_map.replace(allocated_sections);
         self.section_map = allocated_sections;
+        
         // Resolves external symbols (functions) and maps them to their memory addresses
         let (functions, function_map) = FunctionMap::new(&self.coff)?;
         self.function_map = function_map;
