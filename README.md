@@ -1,7 +1,8 @@
 # coffeeldr 🦀 
 
 ![Rust](https://img.shields.io/badge/made%20with-Rust-red)
-![Platform](https://img.shields.io/badge/platform-windows-blueviolet)
+![crate](https://img.shields.io/crates/v/coffeeldr.svg)
+![docs](https://docs.rs/coffeeldr/badge.svg)
 ![Forks](https://img.shields.io/github/forks/joaoviictorti/coffeeldr)
 ![Stars](https://img.shields.io/github/stars/joaoviictorti/coffeeldr)
 ![License](https://img.shields.io/github/license/joaoviictorti/coffeeldr)
