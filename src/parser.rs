@@ -1,11 +1,9 @@
 #![allow(non_snake_case, non_camel_case_types)]
 
-use {
-    log::{warn, debug},
-    super::error::CoffError,
-    std::ffi::{c_void, CStr},
-    scroll::{ctx::TryFromCtx, Endian, Pread, LE},
-};
+use log::{warn, debug};
+use super::error::CoffError;
+use std::ffi::{c_void, CStr};
+use scroll::{ctx::TryFromCtx, Endian, Pread, LE};
 
 // Architecture definitions for x64
 const COFF_MACHINE_X64: u16 = 0x8664;
@@ -89,7 +87,7 @@ impl<'a> Coff<'a> {
 
         // The COFF file header
         let mut offset = 0;
-        let file_header: IMAGE_FILE_HEADER = buffer.gread_with(&mut offset, LE).map_err(|_| CoffError::InvalidCoffFile)?;
+        let file_header = buffer.gread_with(&mut offset, LE).map_err(|_| CoffError::InvalidCoffFile)?;
 
         // Detects the architecture of the COFF file and returns an enum `CoffMachine`
         let arch = Self::validate_architecture(file_header)?;
@@ -116,7 +114,7 @@ impl<'a> Coff<'a> {
         
         // A vector of COFF sections
         let sections = (0..num_sections as usize).map(|_| {
-            let section: IMAGE_SECTION_HEADER = buffer.gread_with(&mut offset, LE).map_err(|_| CoffError::InvalidCoffSectionFile)?;
+            let section = buffer.gread_with(&mut offset, LE).map_err(|_| CoffError::InvalidCoffSectionFile)?;
             Ok(section)
         }).collect::<Result<Vec<IMAGE_SECTION_HEADER>, CoffError>>()?;
 
@@ -195,7 +193,7 @@ impl<'a> Coff<'a> {
         let mut relocations = Vec::with_capacity(num_relocs);
         let mut offset = reloc_offset;
         for _ in 0..num_relocs {
-            let relocation: IMAGE_RELOCATION = self.buffer.gread_with(&mut offset, LE).unwrap();
+            let relocation = self.buffer.gread_with(&mut offset, LE).unwrap();
             relocations.push(relocation);
         }
         
@@ -219,11 +217,11 @@ impl<'a> Coff<'a> {
                 let long_name_offset = symtbl.N.Name.Long as usize;
                 let string_table_offset = self.file_header.PointerToSymbolTable as usize
                     + self.file_header.NumberOfSymbols as usize * size_of::<IMAGE_SYMBOL>();
-                let full_offset = string_table_offset + long_name_offset;
+                let offset = string_table_offset + long_name_offset;
 
                 // Retrieve the name from the string table
-                let name_ptr = &self.buffer[full_offset] as *const u8 as *const i8;
-                CStr::from_ptr(name_ptr).to_string_lossy().into_owned()
+                let name_ptr = &self.buffer[offset] as *const u8;
+                CStr::from_ptr(name_ptr.cast()).to_string_lossy().into_owned()
             };
 
             name.trim_end_matches('\0').to_string()
@@ -240,7 +238,8 @@ impl<'a> Coff<'a> {
     /// 
     /// * The page-aligned value.
     pub fn page_align(page: usize) -> usize {
-        page + ((0x1000 - (page & (0x1000 - 1))) % 0x1000)
+        const SIZE_OF_PAGE: usize = 0x1000;
+        (page + SIZE_OF_PAGE - 1) & !(SIZE_OF_PAGE - 1)
     }
 
     /// Retrieves the section name from an `IMAGE_SECTION_HEADER` struct.

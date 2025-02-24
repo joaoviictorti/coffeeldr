@@ -199,6 +199,7 @@ pub fn get_function_internal_address(name: &str) -> Result<usize, CoffeeLdrError
         "BeaconDataParse" => Ok(BeaconDataParse as usize),
         "BeaconDataLength" => Ok(BeaconDataLength as usize),
         "BeaconDataExtract" => Ok(BeaconDataExtract as usize),
+        "BeaconDataPtr" => Ok(BeaconDataPtr as usize),
 
         // Utility functions
         "toWideChar" => Ok(toWideChar as usize),
@@ -761,6 +762,34 @@ fn BeaconInjectProcess(
         CloseHandle(h_thread);
         CloseHandle(h_process);
     }
+}
+
+/// Extracts a pointer to a section of the data buffer.
+///
+/// # Arguments
+///
+/// * `data` - A pointer to the `Data` struct containing the buffer.
+/// * `size` - The number of bytes to extract.
+///
+/// # Returns
+///
+/// * A pointer to the requested section of the buffer, or `null_mut()` if extraction fails.
+fn BeaconDataPtr(data: *mut Data, size: c_int) -> *mut c_char {
+    if data.is_null() || size <= 0 {
+        return null_mut();
+    }
+
+    let parser = unsafe { &mut *data };
+
+    if parser.length < size {
+        return null_mut();
+    }
+
+    let result = parser.buffer;
+    parser.buffer = unsafe { parser.buffer.add(size as usize) };
+    parser.length -= size;
+
+    result
 }
 
 /// Leaving this to be implemented by people needing/wanting it
