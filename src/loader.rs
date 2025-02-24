@@ -1,21 +1,26 @@
-use {
-    log::{debug, info, warn},
-    std::{
-        ffi::c_void, 
-        mem::transmute,
-        collections::HashMap,
-        ptr::{
-            null_mut, read_unaligned,
-            write_unaligned,
-        },
-    }, 
+use log::{debug, info, warn};
+use std::{
+    ffi::c_void, 
+    mem::transmute,
+    collections::HashMap,
+    ptr::{
+        null_mut, read_unaligned,
+        write_unaligned,
+    },
+};
+
+use dinvk::{
+    data::NT_SUCCESS, GetModuleHandle, 
+    GetProcAddress, LoadLibraryA,
+    NtAllocateVirtualMemory, 
+    NtProtectVirtualMemory
 };
 
 use crate::{
     error::{CoffError, CoffeeLdrError}, 
     parser::{
         Coff, CoffMachine, CoffSource,
-        IMAGE_RELOCATION, IMAGE_SYMBOL
+        IMAGE_RELOCATION, IMAGE_SYMBOL,
     },
     beacon::{
         get_output_data,
@@ -26,7 +31,6 @@ use crate::{
 use windows_sys::Win32::{
     Foundation::GetLastError, 
     System::{
-        LibraryLoader::{GetModuleHandleA, GetProcAddress, LoadLibraryA},
         Diagnostics::Debug::{
             IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_NOT_CACHED, 
             IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE
@@ -35,10 +39,9 @@ use windows_sys::Win32::{
             IMAGE_REL_AMD64_ADDR32NB, IMAGE_REL_AMD64_ADDR64, 
             IMAGE_REL_AMD64_REL32, IMAGE_REL_AMD64_REL32_5, 
             IMAGE_REL_I386_DIR32, IMAGE_REL_I386_REL32, 
-            IMAGE_SYM_CLASS_EXTERNAL, MEM_TOP_DOWN
+            IMAGE_SYM_CLASS_EXTERNAL, MEM_TOP_DOWN,
         },
         Memory::{
-            VirtualAlloc, VirtualFree, VirtualProtect,
             PAGE_EXECUTE_READWRITE, PAGE_EXECUTE, PAGE_EXECUTE_READ, 
             PAGE_EXECUTE_WRITECOPY, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, 
             PAGE_READWRITE, PAGE_NOACCESS, PAGE_READONLY, PAGE_WRITECOPY, 
@@ -46,6 +49,9 @@ use windows_sys::Win32::{
         },
     }
 };
+
+/// Type alias for `Result` with `CoffeeLdrError` as the error type.
+type Result<T> = std::result::Result<T, CoffeeLdrError>;
 
 /// Type alias for the COFF main input function, which receives a pointer to data and the size of the data.
 type CoffMain = fn(*mut u8, usize);
@@ -59,7 +65,7 @@ pub struct CoffeeLdr<'a> {
     section_map: Vec<SectionMap>,
 
     /// Map of functions `FunctionMap`.
-    function_map: FunctionMap
+    function_map: FunctionMap,
 }
 
 impl<'a> Default for CoffeeLdr<'a> {
@@ -72,7 +78,7 @@ impl<'a> Default for CoffeeLdr<'a> {
         Self {
             coff: Coff::default(),
             section_map: Vec::new(),
-            function_map: FunctionMap::default()
+            function_map: FunctionMap::default(),
         }
     }
 }
@@ -120,7 +126,7 @@ impl<'a> CoffeeLdr<'a> {
     ///     Err(e) => println!("Error loading COFF: {:?}", e),
     /// }
     /// ```
-    pub fn new<T: Into<CoffSource<'a>>>(source: T) -> Result<Self, CoffeeLdrError> {
+    pub fn new<T: Into<CoffSource<'a>>>(source: T) -> Result<Self> {
         // Processes COFF based on the source (file or buffer)
         let coff = match source.into() {
             CoffSource::File(path) => {
@@ -139,7 +145,7 @@ impl<'a> CoffeeLdr<'a> {
         Ok(Self {
             coff,
             section_map: Vec::new(),
-            function_map: FunctionMap::default()
+            function_map: FunctionMap::default(),
         })
     }
 
@@ -167,7 +173,7 @@ impl<'a> CoffeeLdr<'a> {
     ///     Err(err_code) => println!("[!] Error: {:?}", err_code)
     /// }
     /// ```
-    pub fn run(&mut self, entry: &str, args: Option<*mut u8>, argc: Option<usize>) -> Result<String, CoffeeLdrError> {
+    pub fn run(&mut self, entry: &str, args: Option<*mut u8>, argc: Option<usize>) -> Result<String> {
         info!("Preparing environment for COFF execution.");
 
         // Prepares the environment to execute the COFF file
@@ -201,47 +207,54 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// * `Ok(())` - If the environment is prepared successfully.
     /// * `Err(CoffeeLdrError)` - If any error occurs during preparation, returns a specific `CoffeeLdrError`.
-    fn prepare(&mut self) -> Result<(), CoffeeLdrError> {
-        // Checks that the COFF architecture is compatible with the system
+    fn prepare(&mut self) -> Result<()> {
+        // Verify that the COFF file's architecture.
         self.check_architecture()?;
-
-        // Allocates memory to load the COFF sections
-        let allocated_sections = self.alloc_bof_memory()?;
-        self.section_map = allocated_sections;
-        
-        // Resolves external symbols (functions) and maps them to their memory addresses
+    
+        // Allocate memory for loading COFF sections and store the allocated section mappings.
+        let sections = self.alloc_bof_memory()?;
+        self.section_map = sections;
+    
+        // Resolve external symbols (such as function addresses) and build a function lookup map.
         let (functions, function_map) = FunctionMap::new(&self.coff)?;
         self.function_map = function_map;
-
-        // Processes relocations to adjust addresses based on symbols
+    
+        // Process relocations to correctly adjust symbol addresses based on memory layout.
         let mut index = 0;
         for (i, section) in self.coff.sections.iter().enumerate() {
+            // Retrieve relocation entries for the current section.
             let relocations = self.coff.get_relocations(section);
-
             for relocation in relocations.iter() {
-                let symbol = &self.coff.symbols[relocation.SymbolTableIndex as usize];       
-                let symbol_reloc_addr = (self.section_map[i].base as usize +  unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
-                
-                let name = self.coff.get_symbol_name(symbol); 
+                // Look up the symbol associated with the relocation.
+                let symbol = &self.coff.symbols[relocation.SymbolTableIndex as usize];
+    
+                // Compute the address where the relocation should be applied.
+                let symbol_reloc_addr = (self.section_map[i].base as usize 
+                    + unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
+    
+                // Retrieve the symbol's name (used for function lookups).
+                let name = self.coff.get_symbol_name(symbol);
                 if let Some(function_address) = functions.get(&name).copied() {
                     unsafe { 
                         let function_address = function_address as *mut c_void;
-                        let address = self.function_map.address.add(index); 
+                        let address = self.function_map.address.add(index);
                         address.write(function_address);
 
+                        // Apply the relocation using the resolved function address.
                         self.process_relocation(symbol_reloc_addr, function_address, address, relocation, symbol)?;
                     };
-                    
+    
                     index += 1;
                 } else {
+                    // Apply the relocation but without a resolved function address (null pointer).
                     self.process_relocation(symbol_reloc_addr, null_mut(), null_mut(), relocation, symbol)?;
                 }
             }
         }
-
-        // Adjusts the memory permissions of the allocated sections
+    
+        // Adjust memory permissions for allocated sections (e.g., marking executable sections).
         self.adjust_permissions()?;
-
+    
         Ok(())
     }
 
@@ -267,8 +280,11 @@ impl<'a> CoffeeLdr<'a> {
         function_map: *mut *mut c_void, 
         relocation: &IMAGE_RELOCATION, 
         symbol: &IMAGE_SYMBOL
-    ) -> Result<(), CoffeeLdrError> {
-        debug!("Processing relocation: Type = {}, Symbol Type = {}, StorageClass = {}", relocation.Type, symbol.Type, symbol.StorageClass);
+    ) -> Result<()> {
+        debug!(
+            "Processing relocation: Type = {}, Symbol Type = {}, StorageClass = {}, Section Number: {}", 
+            relocation.Type, symbol.Type, symbol.StorageClass, symbol.SectionNumber
+        );
 
         unsafe {
             if symbol.StorageClass == IMAGE_SYM_CLASS_EXTERNAL as u8 && symbol.SectionNumber == 0 {
@@ -361,9 +377,9 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// * `Ok(())` - If all section permissions were adjusted successfully.
     /// * `Err(CoffeeLdrError)` - If an error occurs while adjusting permissions for any section.
-    fn adjust_permissions(&self) -> Result<(), CoffeeLdrError> {
+    fn adjust_permissions(&mut self) -> Result<()> {
         self.section_map
-            .iter()
+            .iter_mut()
             .filter(|section| section.size > 0)
             .try_for_each(|section| section.adjust_permissions())
     }
@@ -374,18 +390,19 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// * `Ok(Vec<SectionMap>)` - A vector of `SectionMap` structs representing the loaded sections.
     /// * `Err(CoffeeLdrError)` - If memory allocation fails, it returns an error containing the error code from the OS.
-    fn alloc_bof_memory(&self) -> Result<Vec<SectionMap>, CoffeeLdrError> {
-        let size = self.coff.size();
-        let address = unsafe {
-            VirtualAlloc(
-                null_mut(),
-                size,
-                MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN,
-                PAGE_READWRITE,
-            )
-        };
+    fn alloc_bof_memory(&self) -> Result<Vec<SectionMap>> {
+        let mut size = self.coff.size();
+        let mut address = null_mut();
+        let status = NtAllocateVirtualMemory(
+            -1isize as *mut c_void,
+            &mut address,
+            0,
+            &mut size,
+            MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN,
+            PAGE_READWRITE,
+        );
 
-        if address.is_null() {
+        if address.is_null() || !NT_SUCCESS(status) {
             return Err(CoffeeLdrError::MemoryAllocationError(unsafe { GetLastError() }));
         }
 
@@ -400,7 +417,7 @@ impl<'a> CoffeeLdr<'a> {
     /// * `Ok(())` - If the COFF architecture matches the system's architecture.
     /// * `Err(CoffeeLdrError)` - If there is a mismatch between the COFF and system architectures.
     #[inline] 
-    fn check_architecture(&self) -> Result<(), CoffeeLdrError> {
+    fn check_architecture(&self) -> Result<()> {
         match self.coff.arch {
             CoffMachine::X32 => {
                 if cfg!(target_pointer_width = "64") {
@@ -424,24 +441,27 @@ impl<'a> CoffeeLdr<'a> {
     }
 }
 
+/// Type for ntapi `NtFreeVirtualMemory`
+type NtFreeVirtualMemory = unsafe extern "system" fn(ProcessHandle: *mut c_void, BaseAddress: *mut *mut c_void, RegionSize: *mut usize, FreeType: u32);
+
 /// Implements the `Drop` trait to release memory when `CoffeeLdr` goes out of scope.
 impl<'a> Drop for CoffeeLdr<'a> {
     fn drop(&mut self) {
+        // Retrive Ntdll
+        let ntdll = dinvk::get_ntdll_address();
+        let mut size = 0;
+
         // Iterate over each section in the section map
-        for section in self.section_map.iter() {
+        for section in self.section_map.iter_mut() {
             // Release memory if the base pointer is not null
             if !section.base.is_null() {
-                unsafe {
-                    VirtualFree(section.base, 0, MEM_RELEASE);
-                }
+                dinvk::dinvoke!(ntdll, "NtFreeVirtualMemory", NtFreeVirtualMemory, -1isize as *mut c_void, &mut section.base, &mut size, MEM_RELEASE);
             }
         }
 
         // Release memory for the function map if the address pointer is not null
         if !self.function_map.address.is_null() {
-            unsafe {
-                VirtualFree(*self.function_map.address, 0, MEM_RELEASE);
-            }
+            dinvk::dinvoke!(ntdll, "NtFreeVirtualMemory", NtFreeVirtualMemory, -1isize as *mut c_void, &mut *self.function_map.address, &mut size, MEM_RELEASE);
         }
     }
 }
@@ -468,22 +488,25 @@ impl FunctionMap {
     /// * `Ok((HashMap<String, usize>, FunctionMap))` - A tuple containing the resolved symbols and 
     ///   function map, with each symbol's name mapped to its resolved address.
     /// * `Err(CoffeeLdrError)` - If memory allocation fails or symbol resolution exceeds the limit.
-    fn new(coff: &Coff) -> Result<(HashMap<String, usize>, FunctionMap), CoffeeLdrError> {
+    fn new(coff: &Coff) -> Result<(HashMap<String, usize>, FunctionMap)> {
         let symbols = Self::process_symbols(coff)?;
-        let address = unsafe {
-            VirtualAlloc(
-                null_mut(), 
-                MAX_SYMBOLS * size_of::<*mut c_void>(),
-                MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN, 
-                PAGE_READWRITE
-            ) as *mut *mut c_void
-        };
+        let mut size = MAX_SYMBOLS * size_of::<*mut c_void>();
+        let mut addr = null_mut();
+        let status = NtAllocateVirtualMemory(
+            -1isize as *mut c_void,
+            &mut addr,
+            0,
+            &mut size,
+            MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN, 
+            PAGE_READWRITE
+        );
 
-        if address.is_null() {
+        if addr.is_null() || !NT_SUCCESS(status) {
             return Err(CoffeeLdrError::MemoryAllocationError(unsafe { GetLastError() }))
         }
 
-        Ok((symbols, FunctionMap { address }))
+        let address = addr as *mut *mut c_void;
+        Ok((symbols, FunctionMap { address  }))
     }
 
     /// Processes the external symbols in the COFF file and resolves their addresses.
@@ -496,7 +519,7 @@ impl FunctionMap {
     /// 
     /// * `Ok(HashMap<String, usize>)` - A map of symbol names to their resolved addresses.
     /// * `Err(CoffeeLdrError)` - If symbol resolution fails or the number of symbols exceeds the limit.
-    fn process_symbols(coff: &Coff) -> Result<HashMap<String, usize>, CoffeeLdrError> {
+    fn process_symbols(coff: &Coff) -> Result<HashMap<String, usize>> {
         let mut functions = HashMap::with_capacity(MAX_SYMBOLS);
 
         for symbol in &coff.symbols {
@@ -525,7 +548,7 @@ impl FunctionMap {
     /// 
     /// * `Ok(usize)` - The resolved address of the symbol.
     /// * `Err(CoffeeLdrError)` - If the symbol cannot be found or resolution fails.
-    fn resolve_symbol_address(name: &str, coff: &Coff) -> Result<usize, CoffeeLdrError> {
+    fn resolve_symbol_address(name: &str, coff: &Coff) -> Result<usize> {
         debug!("Attempting to resolve address for symbol: {}", name);
         let prefix = match coff.arch { 
             CoffMachine::X64 => "__imp_",
@@ -543,14 +566,14 @@ impl FunctionMap {
             function = function.split('@').next().unwrap_or(function);
         }
 
-        let dll = format!("{}\0", dll);
-        let function = format!("{}\0", function);
+        let dll = format!("{}", dll);
+        let function = format!("{}", function);
         debug!("Resolving Module {} and Function {}", dll, function);
 
-        let module = unsafe {
-            let mut handle = GetModuleHandleA(dll.as_ptr());
+        let module = {
+            let mut handle = GetModuleHandle(&dll, None);
             if handle.is_null() {
-                handle = LoadLibraryA(dll.as_ptr());
+                handle = LoadLibraryA(&dll);
                 if handle.is_null() {
                     return Err(CoffeeLdrError::ModuleNotFound(dll));
                 }
@@ -561,10 +584,11 @@ impl FunctionMap {
             }
         };
 
-        unsafe {
-            GetProcAddress(module, function.as_ptr())
-                .map(|addr| addr as usize)
-                .ok_or(CoffeeLdrError::FunctionNotFound(symbol_name.to_string()))
+        let addr = GetProcAddress(module, function, None);
+        if addr.is_null() {
+            Err(CoffeeLdrError::FunctionNotFound(symbol_name.to_string()))
+        } else {
+            Ok(addr as usize)
         }
     }
 }
@@ -635,7 +659,7 @@ impl SectionMap {
     ///
     /// * `Ok(())` - If the permissions were adjusted successfully.
     /// * `Err(CoffeeLdrError)` - If an error occurs while adjusting permissions.
-    fn adjust_permissions(&self) -> Result<(), CoffeeLdrError> {
+    fn adjust_permissions(&mut self) -> Result<()> {
         info!("Adjusting memory permissions for section: Name = {}, Address = {:?}, Size = {}, Characteristics = 0x{:X}", 
             self.name, self.base, self.size, self.characteristics
         );
@@ -661,13 +685,13 @@ impl SectionMap {
             warn!("Unknown protection, using PAGE_EXECUTE_READWRITE");
             PAGE_EXECUTE_READWRITE
         };
-
+        
         if (protection & IMAGE_SCN_MEM_NOT_CACHED) == IMAGE_SCN_MEM_NOT_CACHED {
             protection |= PAGE_NOCACHE;
         }
 
         let mut old_protect = 0;
-        if unsafe { VirtualProtect(self.base, self.size, protection, &mut old_protect) } == 0 {
+        if !NT_SUCCESS(NtProtectVirtualMemory(-1isize as *mut c_void, &mut self.base, &mut self.size, protection, &mut old_protect)) {
             return Err(CoffeeLdrError::MemoryProtectionError(unsafe { GetLastError() }));
         }
 

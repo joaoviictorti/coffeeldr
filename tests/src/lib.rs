@@ -6,6 +6,7 @@ use hex::FromHex;
 #[test]
 fn test_bof_whoami() -> Result<(), Box<dyn std::error::Error>> {
     let mut coffee = CoffeeLdr::new("examples/whoami.x64.o")?;
+
     let output = coffee.run("go", None, None)?;
     println!("{output}");
 
