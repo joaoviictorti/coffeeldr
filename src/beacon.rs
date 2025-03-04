@@ -754,6 +754,7 @@ fn BeaconInjectProcess(
             0, 
             null_mut()
         );
+        
         if h_thread.is_null() {
             CloseHandle(h_process);
             return;
