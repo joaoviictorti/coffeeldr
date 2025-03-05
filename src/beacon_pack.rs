@@ -105,6 +105,7 @@ impl BeaconPack {
         for wchar in s_wide {
             self.buffer.write_u16::<LittleEndian>(wchar)?;
         }
+        
         self.buffer.write_u16::<LittleEndian>(0)?;
         self.size += 4 + length;
 
