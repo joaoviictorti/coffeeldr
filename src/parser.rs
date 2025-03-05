@@ -273,7 +273,7 @@ impl<'a> Coff<'a> {
 }
 
 /// Represents the architecture of the COFF (Common Object File Format) file.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash, Clone, Copy, Eq, PartialOrd, Ord)]
 pub enum CoffMachine {
     /// 64-bit architecture.
     X64,
