@@ -1,10 +1,8 @@
-use {
-    log::*,
-    hex::FromHex,
-    clap::Parser, 
-    base64::{engine::general_purpose, Engine as _},
-    coffeeldr::{BeaconPack, CoffeeLdr},
-};
+use log::{info, error};
+use hex::FromHex;
+use clap::Parser;
+use base64::{engine::general_purpose, Engine as _};
+use coffeeldr::{BeaconPack, CoffeeLdr};
 
 /// The main command-line interface struct.
 #[derive(Parser)]
@@ -141,7 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run CoffeeLdr
     let mut coffee = CoffeeLdr::new(args.bof.as_str())?;
     match coffee.run(&args.entrypoint, buffer, len) {
-        Ok(result) => print!("Output: {result}"),
+        Ok(result) => print!("Output:\n {result}"),
         Err(err_code) => error!("{:?}", err_code),
     }
 
