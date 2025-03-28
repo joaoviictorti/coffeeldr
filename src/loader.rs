@@ -450,7 +450,7 @@ impl<'a> CoffeeLdr<'a> {
 }
 
 /// Implements the `Drop` trait to release memory when `CoffeeLdr` goes out of scope.
-impl<'a> Drop for CoffeeLdr<'a> {
+impl Drop for CoffeeLdr<'_> {
     fn drop(&mut self) {
         // Retrive Ntdll
         let ntdll = dinvk::get_ntdll_address();
