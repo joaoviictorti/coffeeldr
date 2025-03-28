@@ -56,6 +56,14 @@ type Result<T> = std::result::Result<T, CoffeeLdrError>;
 /// Type alias for the COFF main input function, which receives a pointer to data and the size of the data.
 type CoffMain = fn(*mut u8, usize);
 
+/// Type for ntapi `NtFreeVirtualMemory`
+type NtFreeVirtualMemory = unsafe extern "system" fn(
+    ProcessHandle: *mut c_void, 
+    BaseAddress: *mut *mut c_void, 
+    RegionSize: *mut usize, 
+    FreeType: u32
+);
+
 /// Main structure for loading and executing COFF (Common Object File Format) files.
 pub struct CoffeeLdr<'a> {
     /// COFF structure representing the loaded file or buffer.
@@ -441,9 +449,6 @@ impl<'a> CoffeeLdr<'a> {
     }
 }
 
-/// Type for ntapi `NtFreeVirtualMemory`
-type NtFreeVirtualMemory = unsafe extern "system" fn(ProcessHandle: *mut c_void, BaseAddress: *mut *mut c_void, RegionSize: *mut usize, FreeType: u32);
-
 /// Implements the `Drop` trait to release memory when `CoffeeLdr` goes out of scope.
 impl<'a> Drop for CoffeeLdr<'a> {
     fn drop(&mut self) {
@@ -455,13 +460,27 @@ impl<'a> Drop for CoffeeLdr<'a> {
         for section in self.section_map.iter_mut() {
             // Release memory if the base pointer is not null
             if !section.base.is_null() {
-                dinvk::dinvoke!(ntdll, "NtFreeVirtualMemory", NtFreeVirtualMemory, -1isize as *mut c_void, &mut section.base, &mut size, MEM_RELEASE);
+                dinvk::dinvoke!(
+                    ntdll, "NtFreeVirtualMemory", 
+                    NtFreeVirtualMemory, 
+                    -1isize as *mut c_void, 
+                    &mut section.base, 
+                    &mut size, 
+                    MEM_RELEASE
+                );
             }
         }
 
         // Release memory for the function map if the address pointer is not null
         if !self.function_map.address.is_null() {
-            dinvk::dinvoke!(ntdll, "NtFreeVirtualMemory", NtFreeVirtualMemory, -1isize as *mut c_void, &mut *self.function_map.address, &mut size, MEM_RELEASE);
+            dinvk::dinvoke!(
+                ntdll, "NtFreeVirtualMemory", 
+                NtFreeVirtualMemory, 
+                -1isize as *mut c_void, 
+                &mut *self.function_map.address, 
+                &mut size, 
+                MEM_RELEASE
+            );
         }
     }
 }
