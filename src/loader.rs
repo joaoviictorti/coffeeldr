@@ -76,7 +76,7 @@ pub struct CoffeeLdr<'a> {
     function_map: FunctionMap,
 }
 
-impl<'a> Default for CoffeeLdr<'a> {
+impl Default for CoffeeLdr<'_> {
     /// Provides a default-initialized `CoffeeLdr`.
     ///
     /// # Returns
