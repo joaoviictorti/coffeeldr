@@ -1,6 +1,6 @@
 [package]
 name = "coffeeldr"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["João Victor"]
 description = "A COFF (Common Object File Format) loader written in Rust"
 license = "MIT"
@@ -8,7 +8,7 @@ repository = "https://github.com/joaoviictorti/coffeeldr"
 homepage = "https://github.com/joaoviictorti/coffeeldr"
 readme = "README.md"
 keywords = ["coff", "loader", "windows", "rust", "redteam"]
-categories = ["os", "filesystem"]
+categories = ["os", "security"]
 edition = "2021"
 exclude = [
     ".gitignore",
