@@ -6,7 +6,7 @@ use coffeeldr::{BeaconPack, CoffeeLdr};
 
 /// The main command-line interface struct.
 #[derive(Parser)]
-#[clap(author="joaoviictorti", about="coffeeldr")]
+#[clap(author="joaoviictorti", about="A COFF (Common Object File Format) loader written in Rust")]
 pub struct Cli {
     /// The command to be executed.
     #[arg(short, long, required = true)]
