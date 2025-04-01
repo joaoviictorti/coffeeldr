@@ -114,6 +114,23 @@ Another example using [`dir.o`](https://github.com/trustedsec/CS-Situational-Awa
 coffee.exe --bof dir.o --entrypoint go /str:C:\
 ```
 
+### CLI Help
+
+```
+A COFF (Common Object File Format) loader written in Rust
+
+Usage: coffee.exe [OPTIONS] --bof <BOF> [INPUTS]...
+
+Arguments:
+  [INPUTS]...  Multiple arguments in the format `/short:<value>`, `/int:<value>`, `/str:<value>`, `/wstr:<value>`, `/bin:<base64-data>`
+
+Options:
+  -b, --bof <BOF>                The command to be executed
+  -e, --entrypoint <ENTRYPOINT>  Entrypoint to use in the execution [default: go]
+  -v, --verbose...               Verbose mode (-v, -vv, -vvv, etc.)
+  -h, --help                     Print help
+```
+
 ## Contributing to coffeeldr
 To contribute to **coffeeldr**, follow these steps:
 
