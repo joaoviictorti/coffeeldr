@@ -1,8 +1,10 @@
 #![doc = include_str!("../README.md")]
+#![allow(internal_features)]
 #![feature(c_variadic)]
+#![feature(core_intrinsics)]
 
 mod beacon;
-mod parser;
+mod parse;
 mod error;
 
 /// Module exposing the `BeaconPack` structure for packing and manipulating binary data, strings, integers, and buffers.

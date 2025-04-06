@@ -1,5 +1,4 @@
 use log::{info, error};
-use hex::FromHex;
 use clap::Parser;
 use base64::{engine::general_purpose, Engine as _};
 use coffeeldr::{BeaconPack, CoffeeLdr};
@@ -19,6 +18,10 @@ pub struct Cli {
     /// Multiple arguments in the format `/short:<value>`, `/int:<value>`, `/str:<value>`, `/wstr:<value>`, `/bin:<base64-data>`
     #[arg(value_parser)]
     pub inputs: Option<Vec<String>>,
+
+    /// Enables module stomping (e.g., --stomping chakra.dll)
+    #[arg(long)]
+    pub stomping: Option<String>,
 
     /// Verbose mode (-v, -vv, -vvv, etc.)
     #[arg(short, long, action = clap::ArgAction::Count)]
@@ -120,10 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Prepare buffer and length if inputs were provided
     let vec_buffer: Option<Vec<u8>> = if args.inputs.is_some() {
         // Get the buffer from the pack
-        let buffer = pack.getbuffer()?;
-        
-        // Convert the buffer to Vec<u8> using hex encoding
-        Some(Vec::from_hex(hex::encode(&buffer))?)
+        Some(pack.get_buffer_hex()?)
     } else {
         None
     };
@@ -138,6 +138,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run CoffeeLdr
     let mut coffee = CoffeeLdr::new(args.bof.as_str())?;
+    coffee = if let Some(ref module_name) = args.stomping {
+        info!("Module stomping enabled: {}", module_name);
+        coffee.with_module_stomping(module_name)
+    } else {
+        coffee
+    };
+
     match coffee.run(&args.entrypoint, buffer, len) {
         Ok(result) => print!("Output:\n {result}"),
         Err(err_code) => error!("{:?}", err_code),
