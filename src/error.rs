@@ -79,8 +79,8 @@ pub enum CoffeeLdrError {
     /// * `actual` - The architecture of the current system (e.g., x32).
     #[error("Unsupported architecture. File expects {expected}, but current system is {actual}.")]
     ArchitectureMismatch {
-        expected: String,
-        actual: String,
+        expected: &'static str,
+        actual: &'static str,
     },
 
     /// Raised when the COFF file contains more symbols than allowed.
@@ -106,6 +106,18 @@ pub enum CoffeeLdrError {
     /// Raised when an error occurs while reading the output buffer.
     #[error("Error reading output")]
     OutputError,
+
+    /// Error returned when the `.text` section could not be located in the target module during module stomping.
+    #[error("Could not extract .text section from module during stomping")]
+    StompingTextSectionNotFound,
+
+    /// Error returned when the COFF file is too large to fit in the target module's `.text` section.
+    #[error("COFF is too large to stomp over target module section")]
+    StompingSizeOverflow,
+
+    /// Error returned when the base address for the target section is not set during module stomping.
+    #[error("Missing base address for section during module stomping")]
+    MissingStompingBaseAddress,
 }
 
 /// Represents errors specific to handling COFF files during parsing and processing.

@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 use byteorder::{LittleEndian, WriteBytesExt};
+use hex::FromHex;
 
 /// A struct that represents a buffer for packing data with size tracking.
 pub struct BeaconPack {
@@ -25,6 +26,17 @@ impl BeaconPack {
         buf.extend_from_slice(&self.buffer);
         
         Ok(buf)
+    }
+
+    /// Returns the buffer encoded in hexadecimal format (as bytes).
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Vec<u8>)` - A vector containing the hexadecimal representation of the buffer.
+    /// * `Err(Box<dyn std::error::Error>)` - An error if encoding or decoding fails.
+    pub fn get_buffer_hex(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let buf = self.getbuffer()?;
+        Ok(Vec::from_hex(hex::encode(&buf))?)
     }
 
     /// Adds a 2-byte short value to the buffer.

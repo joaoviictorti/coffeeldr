@@ -29,7 +29,7 @@ use {
         alloc::Layout,
         ffi::{c_void, CStr},
         ptr::{null_mut, null, self},
-        os::raw::{c_char, c_int, c_short}, 
+        ffi::{c_char, c_int, c_short}, 
     },
 };
 

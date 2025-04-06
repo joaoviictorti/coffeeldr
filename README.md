@@ -17,8 +17,11 @@
   - [Loading from File](#loading-from-file)
   - [Loading from Buffer](#loading-from-buffer)
   - [Executing a COFF File](#executing-a-coff-file)
+  - [Using Module Stomping](#using-module-stomping)
 - [CLI](#cli)
   - [Input Processing in CLI](#input-processing-in-cli)
+  - [Using Module Stomping via CLI](#using-module-stomping-via-cli)
+  - [CLI Help](#cli-help)
 - [Contributing to coffeeldr](#contributing-to-coffeeldr)
 - [References](#references)
 - [License](#license)
@@ -83,6 +86,16 @@ let mut coffee = CoffeeLdr::new("path/to/coff_file.o").unwrap();
 coffee.run("entry_point_function_name", None, None).unwrap();
 ```
 
+### Using Module Stomping
+
+Module stomping replaces the `.text` section of a loaded module with the COFF code.
+```rs
+let mut coffee = CoffeeLdr::new("path/to/coff_file.o")?
+    .with_module_stomping("xpsservices.dll"); // specify the module to stomp
+
+coffee.run("go", None, None)?;
+```
+
 This method will search for the specified entry point and execute it.
 
 ## CLI
@@ -106,12 +119,20 @@ These are the types of parameters that the tool accepts for processing:
 
 Example command using [`ntcreatethread.o`](https://github.com/trustedsec/CS-Remote-OPs-BOF/blob/main/Injection/ntcreatethread/ntcreatethread.x64.o):
 ```cmd
-coffee.exe --bof ntcreatethread.o --entrypoint go /int:4732 /bin:Y29mZmVlbGRy..
+coffee.exe --bof ntcreatethread.o -e go /int:4732 /bin:Y29mZmVlbGRy..
 ```
 
 Another example using [`dir.o`](https://github.com/trustedsec/CS-Situational-Awareness-BOF/blob/master/SA/dir/dir.x64.o):
 ```cmd
-coffee.exe --bof dir.o --entrypoint go /str:C:\
+coffee.exe --bof dir.o -e go /str:C:\
+```
+
+### Using Module Stomping via CLI
+
+When using the `--stomping <module>` flag, coffeeldr will identify the `.text` section of the specified module and overwrite its contents with the loaded COFF payload
+
+```cmd
+coffee.exe --bof whoami.o -e go --stomping xpsservices.dll
 ```
 
 ### CLI Help
@@ -127,6 +148,7 @@ Arguments:
 Options:
   -b, --bof <BOF>                The command to be executed
   -e, --entrypoint <ENTRYPOINT>  Entrypoint to use in the execution [default: go]
+      --stomping <STOMPING>      Enables module stomping (e.g., --stomping xpsservices.dll)
   -v, --verbose...               Verbose mode (-v, -vv, -vvv, etc.)
   -h, --help                     Print help
 ```
