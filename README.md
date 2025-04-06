@@ -29,6 +29,7 @@
 ## Features
 
 - ✅ Load COFF files from disk or in-memory buffers.
+- ✅ Load COFF files with module stomping.
 - ✅ 32-bit and 64-bit support.
 - ✅ Memory management: Automatically adjusts memory protections to ensure execution (read, write, execute permissions).
 - ✅ Dynamic relocation handling.
@@ -95,8 +96,6 @@ let mut coffee = CoffeeLdr::new("path/to/coff_file.o")?
 
 coffee.run("go", None, None)?;
 ```
-
-This method will search for the specified entry point and execute it.
 
 ## CLI
 
