@@ -95,9 +95,9 @@ checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
 
 [[package]]
 name = "dinvk"
-version = "0.1.3"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5507d457a334bd099fef9bbbd79c20149c658d8e5fc818cc0b9818c1aa25d8a9"
+checksum = "33d76fb3c3828f8d7487b992c91029373cf0a90f7d87ab3ce7d8a52dce1c65d5"
 dependencies = [
  "bitflags 2.9.0",
  "cfg-if",

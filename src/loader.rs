@@ -16,6 +16,7 @@ use std::{
 };
 
 use dinvk::{
+    hash::murmur3,
     parse::get_nt_header,
     data::{
         IMAGE_NT_HEADERS, 
@@ -534,7 +535,7 @@ impl<'a> CoffeeLdr<'a> {
     fn get_text_module(&self) -> Option<(*mut c_void, usize)> {
         unsafe {
             // Invoking LoadLibraryExA dynamically
-            let kernel32 = GetModuleHandle(s!("KERNEL32.DLL"), None);
+            let kernel32 = GetModuleHandle(2808682670u32, Some(murmur3));
             let target = format!("{}\0", self.module);
             let module = {
                 let handle = GetModuleHandle(self.module, None);
@@ -749,16 +750,13 @@ impl FunctionMap {
             function = function.split('@').next().unwrap_or(function);
         }
 
-        let dll = format!("{}", dll);
-        let function = format!("{}", function);
         debug!("Resolving Module {} and Function {}", dll, function);
-
         let module = {
-            let mut handle = GetModuleHandle(&dll, None);
+            let mut handle = GetModuleHandle(dll.to_string(), None);
             if handle.is_null() {
-                handle = LoadLibraryA(&dll);
+                handle = LoadLibraryA(&dll.to_string());
                 if handle.is_null() {
-                    return Err(CoffeeLdrError::ModuleNotFound(dll));
+                    return Err(CoffeeLdrError::ModuleNotFound(dll.to_string()));
                 }
 
                 handle
