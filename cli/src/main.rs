@@ -24,6 +24,7 @@ pub struct Cli {
     pub stomping: Option<String>,
 
     /// Verbose mode (-v, -vv, -vvv, etc.)
+    #[cfg(debug_assertions)]
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
 }
@@ -87,6 +88,7 @@ fn process_input(input: &str, pack: &mut BeaconPack) -> Result<(), String> {
 }
 
 /// Initializes the logger based on the verbosity level (-v, -vv, -vvv)
+#[cfg(debug_assertions)]
 fn init_logger(verbose: u8) {
     // Maps the number of "v"s to the corresponding log level
     let log_level = match verbose {
@@ -104,6 +106,8 @@ fn init_logger(verbose: u8) {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
+    
+    #[cfg(debug_assertions)]
     init_logger(args.verbose);
 
     // Initialize the buffer
@@ -121,7 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Prepare buffer and length if inputs were provided
-    let vec_buffer: Option<Vec<u8>> = if args.inputs.is_some() {
+    let vec_buffer = if args.inputs.is_some() {
         // Get the buffer from the pack
         Some(pack.get_buffer_hex()?)
     } else {
