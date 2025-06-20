@@ -22,7 +22,7 @@ impl BeaconPack {
     /// # Returns
     ///
     /// * `Ok(Vec<u8>)` - A vector containing the size and the buffer data.
-    /// * `Err(Box<dyn Error>)` - An error if writing fails.
+    /// * `Err(BeaconPackError)` - If writing fails.
     pub fn getbuffer(&self) -> Result<Vec<u8>> {
         let mut buf = Vec::with_capacity(4 + self.buffer.len());
         buf.extend_from_slice(&self.size.to_le_bytes());
@@ -36,7 +36,7 @@ impl BeaconPack {
     /// # Returns
     ///
     /// * `Ok(Vec<u8>)` - A vector containing the hexadecimal representation of the buffer.
-    /// * `Err(Box<dyn Error>)` - An error if encoding or decoding fails.
+    /// * `Err(BeaconPackError)` - If encoding or decoding fails.
     pub fn get_buffer_hex(&self) -> Result<Vec<u8>> {
         let buf = self.getbuffer()?;
         Ok(Vec::from_hex(hex::encode(&buf))?)
@@ -51,7 +51,7 @@ impl BeaconPack {
     /// # Returns
     ///
     /// * `Ok(())` - If the short value is added successfully.
-    /// * `Err(Box<dyn Error>)` - An error if writing fails.
+    /// * `Err(BeaconPackError)` - If writing fails.
     pub fn addshort(&mut self, short: i16) -> Result<()> {
         self.write_i16(short);
         self.size += 2;
@@ -68,7 +68,7 @@ impl BeaconPack {
     /// # Returns
     ///
     /// * `Ok(())` - If the integer is added successfully.
-    /// * `Err(Box<dyn Error>)` - An error if writing fails.
+    /// * `Err(BeaconPackError)` - If writing fails.
     pub fn addint(&mut self, int: i32) -> Result<()> {
         self.write_i32(int);
         self.size += 4;
@@ -87,7 +87,7 @@ impl BeaconPack {
     /// # Returns
     ///
     /// * `Ok(())` - If the string is added successfully.
-    /// * `Err(Box<dyn Error>)` - An error if writing fails.
+    /// * `Err(BeaconPackError)` - If writing fails.
     pub fn addstr(&mut self, s: &str) -> Result<()> {
         let s_bytes = s.as_bytes();
         let length = s_bytes.len() as u32 + 1;
@@ -112,7 +112,7 @@ impl BeaconPack {
     /// # Returns
     ///
     /// * `Ok(())` - If the wide string is added successfully.
-    /// * `Err(io::Error)` - An error if writing fails.
+    /// * `Err(BeaconPackError)` - If writing fails.
     pub fn addwstr(&mut self, s: &str) -> Result<()> {
         let s_wide: Vec<u16> = s.encode_utf16().collect();
         let length = (s_wide.len() as u32 * 2) + 2;
@@ -138,7 +138,7 @@ impl BeaconPack {
     /// # Returns
     ///
     /// * `Ok(())` - If the binary data is added successfully.
-    /// * `Err(io::Error)` - An error if writing fails.
+    /// * `Err(BeaconPackError)` - If writing fails.
     pub fn addbin(&mut self, data: &[u8]) -> Result<()> {
         let length = data.len() as u32;
         self.write_u32(length);
