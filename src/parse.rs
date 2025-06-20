@@ -1,9 +1,10 @@
 #![allow(non_snake_case, non_camel_case_types)]
 
+use alloc::{string::{String, ToString}, vec::Vec};
 use binrw::{binread, BinRead};
-use log::{warn, debug};
+use crate::{warn, debug};
 use super::error::CoffError;
-use std::ffi::{c_void, CStr};
+use core::ffi::{c_void, CStr};
 use binrw::io::Cursor;
 
 // Architecture definitions for x64
@@ -207,13 +208,13 @@ impl<'a> Coff<'a> {
         for _ in 0..num_relocs {
             match IMAGE_RELOCATION::read(&mut cursor) {
                 Ok(reloc) => relocations.push(reloc),
-                Err(e) => {
-                    debug!("Failed to read relocation: {e:?}");
+                Err(_e) => {
+                    debug!("Failed to read relocation: {_e:?}");
                     continue;
                 }
             }
         }
-        
+
         relocations
     }
 
@@ -234,10 +235,9 @@ impl<'a> Coff<'a> {
                 let long_name_offset = symtbl.N.Name.Long as usize;
                 let string_table_offset = self.file_header.PointerToSymbolTable as usize
                     + self.file_header.NumberOfSymbols as usize * size_of::<IMAGE_SYMBOL>();
-                
-                let offset = string_table_offset + long_name_offset;
-
+            
                 // Retrieve the name from the string table
+                let offset = string_table_offset + long_name_offset;
                 let name_ptr = &self.buffer[offset] as *const u8;
                 CStr::from_ptr(name_ptr.cast()).to_string_lossy().into_owned()
             };
@@ -426,7 +426,7 @@ pub struct IMAGE_SYMBOL {
     pub NumberOfAuxSymbols: u8,
 
     #[br(calc = unsafe {
-        std::ptr::read_unaligned(name_raw.as_ptr() as *const IMAGE_SYMBOL_0)
+        core::ptr::read_unaligned(name_raw.as_ptr() as *const IMAGE_SYMBOL_0)
     })]
     pub N: IMAGE_SYMBOL_0,
 }
@@ -500,7 +500,7 @@ pub struct IMAGE_SECTION_HEADER {
 
 /// A union representing either the physical or virtual size of the section.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy,)]
 pub union IMAGE_SECTION_HEADER_0 {
     /// The physical address of the section.
     pub PhysicalAddress: u32,
