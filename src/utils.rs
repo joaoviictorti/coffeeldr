@@ -18,7 +18,7 @@ use windows_sys::Win32::{
 ///
 /// # Returns
 ///
-/// Returns `Ok(Vec<u8>)` containing the file's contents if the operation succeeds, or a
+/// * Returns `Ok(Vec<u8>)` containing the file's contents if the operation succeeds, or a
 /// `CoffeeLdrError::GenericError` if any step fails.
 pub fn read_file(name: &str) -> Result<Vec<u8>> {
     let file_name = CString::new(name).map_err(|_| CoffeeLdrError::GenericError(s!("Invalid cstring")))?;
