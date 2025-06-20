@@ -28,6 +28,7 @@
 
 ## Features
 
+- ✅ Support `#[no_std]` projects
 - ✅ Load COFF files from disk or in-memory buffers.
 - ✅ Load COFF files with module stomping.
 - ✅ 32-bit and 64-bit support.
