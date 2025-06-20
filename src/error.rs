@@ -1,3 +1,4 @@
+use alloc::string::String;
 use thiserror::Error;
 
 /// Represents errors that can occur during the loading and handling of COFF (Common Object File Format) files.
@@ -91,6 +92,14 @@ pub enum CoffeeLdrError {
     #[error("Too many symbols in the COFF file. Maximum allowed is {0}.")]
     TooManySymbols(usize),
 
+    /// Raised when an unspecified error occurs, useful for simple context-specific failures.
+    ///
+    /// # Arguments
+    ///
+    /// * `{0}` - A message describing the failure.
+    #[error("{0}")]
+    GenericError(String),
+
     /// Raised when a symbol cannot be parsed correctly.
     ///
     /// # Arguments
@@ -118,6 +127,27 @@ pub enum CoffeeLdrError {
     /// Error returned when the base address for the target section is not set during module stomping.
     #[error("Missing base address for section during module stomping")]
     MissingStompingBaseAddress,
+}
+
+#[derive(Debug, Error)]
+pub enum BeaconPackError {
+    #[error("Hex error: {0}")]
+    Hex(hex::FromHexError),
+
+    #[error("IO error: {0}")]
+    Io(binrw::io::Error),
+}
+
+impl From<hex::FromHexError> for BeaconPackError {
+    fn from(e: hex::FromHexError) -> Self {
+        Self::Hex(e)
+    }
+}
+
+impl From<binrw::io::Error> for BeaconPackError {
+    fn from(e: binrw::io::Error) -> Self {
+        Self::Io(e)
+    }
 }
 
 /// Represents errors specific to handling COFF files during parsing and processing.

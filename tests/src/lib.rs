@@ -7,10 +7,8 @@ use std::error::Error;
 #[test]
 fn test_bof_whoami() -> Result<(), Box<dyn Error>> {
     let mut coffee = CoffeeLdr::new("examples/whoami.x64.o")?;
-
     let output = coffee.run("go", None, None)?;
     println!("{output}");
-
     Ok(())
 }
 
@@ -18,10 +16,8 @@ fn test_bof_whoami() -> Result<(), Box<dyn Error>> {
 fn test_bof_whoami_with_stomping() -> Result<(), Box<dyn Error>> {
     let mut coffee = CoffeeLdr::new("examples/whoami.x64.o")?
         .with_module_stomping("amsi.dll");
-
     let output = coffee.run("go", None, None)?;
     println!("{output}");
-
     Ok(())
 }
 
@@ -60,10 +56,8 @@ fn test_bof_dir() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_buffer_memory() -> Result<(), Box<dyn Error>> {
     let buffer = include_bytes!("../examples/whoami.x64.o");
-
     let mut coffee = CoffeeLdr::new(buffer)?;
     let output = coffee.run("go", None, None)?;
     println!("{output}");
-
     Ok(())
 }
