@@ -1,6 +1,6 @@
 [package]
 name = "coffeeldr"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 license = "MIT"
 readme = "README.md"
@@ -22,10 +22,10 @@ log = "0.4.22"
 obfstr = "0.4.4"
 dinvk = "0.2.6"
 binrw = { version = "0.15.0", default-features = false }
-printf-compat = { version = "0.1.1", default-features = false }
 spin = { version = "0.10.0", default-features = false }
 thiserror = { version = "2.0.12", default-features = false }
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+printf-compat = { version = "0.1.1", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [
@@ -43,5 +43,3 @@ windows-sys = { version = "0.59.0", features = [
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"
 targets = ["x86_64-pc-windows-gnu", "x86_64-pc-windows-msvc"]
-no-default-features = true
-features = []
