@@ -137,7 +137,7 @@ coffee.exe --bof whoami.o -e go --stomping xpsservices.dll
 
 ### CLI Help
 
-```
+```text
 A COFF (Common Object File Format) loader written in Rust
 
 Usage: coffee.exe [OPTIONS] --bof <BOF> [INPUTS]...
