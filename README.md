@@ -166,6 +166,8 @@ Alternatively, consult the [GitHub documentation](https://docs.github.com/en/pul
 
 ## References
 
+I want to express my gratitude to these projects that inspired me to create `coffeeldr` and contribute with some features:
+
 - [Havoc](https://github.com/HavocFramework/Havoc)
 - [otterhacker.github.io](https://otterhacker.github.io/Malware/CoffLoader.html)
 - [Trustedsec - COFFLoader](https://github.com/trustedsec/COFFLoader)
