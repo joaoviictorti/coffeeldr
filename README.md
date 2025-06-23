@@ -167,7 +167,7 @@ Alternatively, consult the [GitHub documentation](https://docs.github.com/en/pul
 ## References
 
 - [Havoc](https://github.com/HavocFramework/Havoc)
-- [Otterhacker - CoffLoader](https://otterhacker.github.io/Malware/CoffLoader.html)
+- [otterhacker.github.io](https://otterhacker.github.io/Malware/CoffLoader.html)
 - [Trustedsec - COFFLoader](https://github.com/trustedsec/COFFLoader)
 
 ## License
