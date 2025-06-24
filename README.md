@@ -31,7 +31,7 @@
 - ✅ Support `#[no_std]` projects
 - ✅ Load COFF files from disk or in-memory buffers.
 - ✅ Load COFF files with module stomping.
-- ✅ 32-bit and 64-bit support.
+- ✅ `x64` and `x86` architectures supported.
 - ✅ Memory management: Automatically adjusts memory protections to ensure execution (read, write, execute permissions).
 - ✅ Dynamic relocation handling.
 - ✅ Fully written in Rust with safety and performance in mind.
