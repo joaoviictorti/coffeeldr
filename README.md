@@ -28,7 +28,7 @@
 
 ## Features
 
-- ✅ Support `#[no_std]` projects
+- ✅ Supports `#[no_std]` environments (with `alloc`)
 - ✅ Load COFF files from disk or in-memory buffers.
 - ✅ Load COFF files with module stomping.
 - ✅ `x64` and `x86` architectures supported.
