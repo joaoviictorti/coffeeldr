@@ -9,22 +9,6 @@
 
 `coffeeldr` is a modern and lightweight COFF (Common Object File Format) loader for Windows written in Rust, designed to run COFF files on Windows. It supports both 32-bit and 64-bit architectures and allows you to load and execute COFF files from files or memory buffers with Rust’s safety and performance guarantees.
 
-## Table of Contents
-
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-  - [Loading from File](#loading-from-file)
-  - [Loading from Buffer](#loading-from-buffer)
-  - [Executing a COFF File](#executing-a-coff-file)
-  - [Using Module Stomping](#using-module-stomping)
-- [CLI](#cli)
-  - [Input Processing in CLI](#input-processing-in-cli)
-  - [Using Module Stomping via CLI](#using-module-stomping-via-cli)
-  - [CLI Help](#cli-help)
-- [References](#references)
-- [License](#license)
-
 ## Features
 
 - ✅ Supports `#[no_std]` environments (with `alloc`).
@@ -36,7 +20,7 @@
 - ✅ Fully written in Rust with safety and performance in mind.
 - ✅ Easy CLI integration with flexible input handling.
 
-## Installation
+## Getting started
 
 Add `coffeeldr` to your project by updating your `Cargo.toml`:
 
