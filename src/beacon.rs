@@ -113,7 +113,7 @@ impl fmt::Display for BeaconOutputBuffer {
             .iter()
             .map(|&c| if c as u8 == 0 { '\n' } else { c as u8 as char })
             .collect::<String>();
-        write!(f, "{}", string)
+        write!(f, "{string}")
     }
 }
 
