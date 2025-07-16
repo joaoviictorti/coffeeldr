@@ -1,13 +1,17 @@
 use alloc::string::String;
 use thiserror::Error;
 
-/// Represents errors that can occur during the loading and handling of COFF (Common Object File Format) files.
+/// Type alias for `Result` with `CoffeeLdrError` as the error type.
+pub(crate) type Result<T> = core::result::Result<T, crate::error::CoffeeLdrError>;
+
+/// Represents errors that can occur during the loading and 
+/// handling of COFF (Common Object File Format) files.
 #[derive(Debug, Error)]
 pub enum CoffeeLdrError {
     /// Occurs when memory allocation fails.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The error code returned during the memory allocation attempt.
     #[error("Memory allocation error: code {0}")]
     MemoryAllocationError(u32),
@@ -15,15 +19,15 @@ pub enum CoffeeLdrError {
     /// Occurs when there is a failure in setting memory protection for a region.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The error code returned during the memory protection operation.
     #[error("Memory protection error: code {0}")]
     MemoryProtectionError(u32),
-    
+
     /// Represents an error when a symbol in the COFF file has an invalid format.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The symbol string that is considered invalid.
     #[error("Invalid symbol format: '{0}'")]
     InvalidSymbolFormat(String),
@@ -31,7 +35,7 @@ pub enum CoffeeLdrError {
     /// Raised when a relocation entry in the COFF file has an unsupported or invalid type.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The invalid relocation type encountered.
     #[error("Invalid relocation type: {0}")]
     InvalidRelocationType(u16),
@@ -39,7 +43,7 @@ pub enum CoffeeLdrError {
     /// Occurs when a required symbol (function) is not found during symbol resolution.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The name of the symbol (function) that was not found.
     #[error("Failed to resolve symbol: '{0}'")]
     FunctionNotFound(String),
@@ -47,7 +51,7 @@ pub enum CoffeeLdrError {
     /// Raised when an internal symbol (used by the COFF loader itself) cannot be resolved.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The name of the internal symbol that was not found.
     #[error("Failed to resolve internal symbol: '{0}'")]
     FunctionInternalNotFound(String),
@@ -55,7 +59,7 @@ pub enum CoffeeLdrError {
     /// Raised when the specified module is not found during module resolution.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The name of the module that could not be found.
     #[error("Failed to resolve the module: '{0}'")]
     ModuleNotFound(String),
@@ -63,11 +67,11 @@ pub enum CoffeeLdrError {
     /// Raised when the COFF file cannot be parsed correctly.
     #[error("Error loading COFF file.")]
     ParsingError,
-    
+
     /// Propagates errors from the `CoffError` type, which represent issues specifically with COFF file handling.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The `CoffError` instance that caused the failure.
     #[error("{0}")]
     CoffError(#[from] CoffError),
@@ -75,19 +79,16 @@ pub enum CoffeeLdrError {
     /// Raised when there is a mismatch between the expected and actual system architecture.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `expected` - The architecture the file expects (e.g., x64).
     /// * `actual` - The architecture of the current system (e.g., x32).
     #[error("Unsupported architecture. File expects {expected}, but current system is {actual}.")]
-    ArchitectureMismatch {
-        expected: &'static str,
-        actual: &'static str,
-    },
+    ArchitectureMismatch { expected: &'static str, actual: &'static str },
 
     /// Raised when the COFF file contains more symbols than allowed.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The number of symbols encountered, exceeding the limit.
     #[error("Too many symbols in the COFF file. Maximum allowed is {0}.")]
     TooManySymbols(usize),
@@ -103,7 +104,7 @@ pub enum CoffeeLdrError {
     /// Raised when a symbol cannot be parsed correctly.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - The name of the symbol that caused the parsing failure.
     #[error("Failed to parse symbol: '{0}'")]
     ParseError(String),
@@ -129,34 +130,13 @@ pub enum CoffeeLdrError {
     MissingStompingBaseAddress,
 }
 
-#[derive(Debug, Error)]
-pub enum BeaconPackError {
-    #[error("Hex error: {0}")]
-    Hex(hex::FromHexError),
-
-    #[error("IO error: {0}")]
-    Io(binrw::io::Error),
-}
-
-impl From<hex::FromHexError> for BeaconPackError {
-    fn from(e: hex::FromHexError) -> Self {
-        Self::Hex(e)
-    }
-}
-
-impl From<binrw::io::Error> for BeaconPackError {
-    fn from(e: binrw::io::Error) -> Self {
-        Self::Io(e)
-    }
-}
-
 /// Represents errors specific to handling COFF files during parsing and processing.
 #[derive(Debug, Error)]
 pub enum CoffError {
     /// Raised when a COFF file cannot be read correctly.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `{0}` - A message describing the file read error.
     #[error("The file could not be read: {0}")]
     FileReadError(String),
@@ -184,4 +164,25 @@ pub enum CoffError {
     /// Raised when the COFF file exceeds the allowed limit of sections (96 sections).
     #[error("Section limit exceeded: the number of sections exceeds the supported limit of 96.")]
     SectionLimitExceeded,
+}
+
+#[derive(Debug, Error)]
+pub enum BeaconPackError {
+    #[error("Hex error: {0}")]
+    Hex(hex::FromHexError),
+
+    #[error("IO error: {0}")]
+    Io(binrw::io::Error),
+}
+
+impl From<hex::FromHexError> for BeaconPackError {
+    fn from(e: hex::FromHexError) -> Self {
+        Self::Hex(e)
+    }
+}
+
+impl From<binrw::io::Error> for BeaconPackError {
+    fn from(e: binrw::io::Error) -> Self {
+        Self::Io(e)
+    }
 }

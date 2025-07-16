@@ -1,60 +1,56 @@
-use obfstr::obfstr as s;
-use dinvk::{data::{NT_SUCCESS, NTSTATUS}, *};
-use dinvk::parse::PE;
 use alloc::{
-    boxed::Box, collections::BTreeMap, 
-    format, string::{String, ToString}, 
-    vec::Vec
+    boxed::Box,
+    collections::BTreeMap,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::intrinsics::{
+    volatile_copy_nonoverlapping_memory, 
+    volatile_set_memory
 };
 use core::{
-    ffi::c_void, 
+    ffi::c_void,
     mem::transmute,
-    intrinsics::{
-        volatile_copy_nonoverlapping_memory, 
-        volatile_set_memory
-    }, 
-    ptr::{
-        null_mut, 
-        read_unaligned, 
-        write_unaligned
-    }
+    ptr::{null_mut, read_unaligned, write_unaligned},
 };
 
-use super::{Result, info, warn, debug};
-use super::{
-    utils::read_file,
-    error::{CoffError, CoffeeLdrError},
-    beacon::{
-        get_function_internal_address, 
-        get_output_data 
-    }, 
-    parse::{
-        Coff, CoffMachine, CoffSource, 
-        IMAGE_RELOCATION, IMAGE_SYMBOL,
-    },
+use obfstr::obfstr as s;
+use dinvk::{
+    parse::PE,
+    data::{NT_SUCCESS, NTSTATUS},
+    *,
 };
 
 use windows_sys::Win32::{
-    Foundation::{GetLastError, STATUS_SUCCESS}, 
+    Foundation::{GetLastError, STATUS_SUCCESS},
     System::{
+        Memory::*,
+        Diagnostics::Debug::*,
+        SystemServices::*,
         LibraryLoader::DONT_RESOLVE_DLL_REFERENCES,
-        Diagnostics::Debug::{
-            IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_NOT_CACHED, 
-            IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE
-        }, 
-        Memory::{
-            MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, 
-            PAGE_EXECUTE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE, 
-            PAGE_EXECUTE_WRITECOPY, PAGE_NOACCESS, PAGE_NOCACHE, 
-            PAGE_READONLY, PAGE_READWRITE, PAGE_WRITECOPY
-        }, 
-        SystemServices::{
-            IMAGE_REL_AMD64_ADDR32NB, IMAGE_REL_AMD64_ADDR64, 
-            IMAGE_REL_AMD64_REL32, IMAGE_REL_AMD64_REL32_5,
-            IMAGE_REL_I386_DIR32, IMAGE_REL_I386_REL32,
-            IMAGE_SYM_CLASS_EXTERNAL, MEM_TOP_DOWN
-        }
-    }
+    },
+};
+
+use super::{debug, info, warn};
+use super::{
+    beacon::{
+        get_function_internal_address, 
+        get_output_data
+    },
+    error::{
+        CoffError, 
+        CoffeeLdrError, 
+        Result
+    },
+    utils::read_file,
+};
+use super::parse::{
+    Coff, 
+    CoffMachine, 
+    CoffSource, 
+    IMAGE_RELOCATION, 
+    IMAGE_SYMBOL
 };
 
 /// Type alias for the COFF main input function, which receives a pointer to data and the size of the data.
@@ -62,24 +58,24 @@ type CoffMain = extern "C" fn(*mut u8, usize);
 
 /// Type for ntapi `LoadLibraryExA`
 type LoadLibraryExA = unsafe extern "system" fn(
-    lpLibFileName: *const u8, 
-    hFile: *mut c_void, 
-    dwFlags: u32
+    lp_lib_file_name: *const u8, 
+    h_file: *mut c_void, 
+    dw_flags: u32
 ) -> *mut c_void;
 
 /// Type for ntapi `NtFreeVirtualMemory`
 type NtFreeVirtualMemory = unsafe extern "system" fn(
-    ProcessHandle: *mut c_void, 
-    BaseAddress: *mut *mut c_void, 
-    RegionSize: *mut usize, 
-    FreeType: u32
+    process_handle: *mut c_void, 
+    base_address: *mut *mut c_void, 
+    region_size: *mut usize, 
+    free_type: u32
 ) -> NTSTATUS;
 
 /// Main structure for loading and executing COFF (Common Object File Format) files.
 pub struct CoffeeLdr<'a> {
     /// COFF structure representing the loaded file or buffer.
     coff: Coff<'a>,
-    
+
     /// Vector mapping the allocated memory sections.
     section_map: Vec<SectionMap>,
 
@@ -103,12 +99,12 @@ impl Default for CoffeeLdr<'_> {
     ///
     /// * A default-initialized `CoffeeLdr`.
     fn default() -> Self {
-        Self {
-            coff: Coff::default(),
-            section_map: Vec::new(),
-            function_map: FunctionMap::default(),
-            stomping: false,
-            module: ""
+        Self { 
+            coff: Coff::default(), 
+            section_map: Vec::new(), 
+            function_map: FunctionMap::default(), 
+            stomping: false, 
+            module: "" 
         }
     }
 }
@@ -118,19 +114,19 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Arguments
     ///
-    /// * `source` - A generic input that can be either a file or a memory buffer containing the COFF data. 
+    /// * `source` - A generic input that can be either a file or a memory buffer containing the COFF data.
     ///   This is converted into a `CoffSource`.
     ///
     /// # Returns
     ///
     /// * `Ok(Self)` - If the COFF source is successfully processed, returning a new `CoffeeLdr` instance.
     /// * `Err(CoffeeLdrError)` - If an error occurs during processing.
-    /// 
+    ///
     /// # Examples
     ///
     /// ## Using a file as a source:
-    /// 
-    /// ```ignore
+    ///
+    /// ```rust,ignore
     /// use coffeeldr::CoffeeLdr;
     ///
     /// let mut loader = CoffeeLdr::new("whoami.o");
@@ -144,8 +140,8 @@ impl<'a> CoffeeLdr<'a> {
     /// ```
     ///
     /// ## Using a byte buffer as a source:
-    /// 
-    /// ```ignore
+    ///
+    /// ```rust,ignore
     /// use coffeeldr::CoffeeLdr;
     ///
     /// let coff_data = include_bytes!("path/to/coff_file.o");
@@ -158,14 +154,14 @@ impl<'a> CoffeeLdr<'a> {
     ///     Err(e) => eprintln!("Error loading COFF: {:?}", e),
     /// }
     /// ```
+    #[rustfmt::skip]
     pub fn new<T: Into<CoffSource<'a>>>(source: T) -> Result<Self> {
         // Processes COFF based on the source (file or buffer)
         let coff = match source.into() {
             CoffSource::File(path) => {
                 info!("Try to read the file: {path}");
                 // Try reading the file
-                let buffer = read_file(path)
-                    .map_err(|_| CoffError::FileReadError(path.to_string()))?;
+                let buffer = read_file(path).map_err(|_| CoffError::FileReadError(path.to_string()))?;
 
                 // Creates the COFF object from the buffer
                 Coff::from_buffer(Box::leak(buffer.into_boxed_slice()))?
@@ -185,38 +181,30 @@ impl<'a> CoffeeLdr<'a> {
     }
 
     /// Enables module stomping for a specified module.
-    ///
-    /// # Arguments
-    ///
-    /// * `module` - A string slice that specifies the name of the module to be stomped.
-    ///
-    /// # Returns
-    ///
-    /// * The modified instance with module stomping enabled and targeted at the specified module.
-    pub fn with_module_stomping(mut self, module: &'a str) -> Self {
+    pub fn module_stomping(mut self, module: &'a str) -> Self {
         self.stomping = true;
         self.module = module;
         self
     }
 
     /// Executes a COFF (Common Object File Format) file in memory.
-    /// 
+    ///
     /// # Arguments
-    /// 
-    /// * `entry` - A string slice representing the entry point of the COFF file. 
+    ///
+    /// * `entry` - A string slice representing the entry point of the COFF file.
     ///   This is the symbol name where execution begins.
-    /// * `args` - Optional pointer to an argument list (`*mut u8`) passed to the entry point. 
+    /// * `args` - Optional pointer to an argument list (`*mut u8`) passed to the entry point.
     ///   If `None`, no arguments are passed.
-    /// * `argc` - An optional `usize` representing the count of arguments passed through `args`. 
+    /// * `argc` - An optional `usize` representing the count of arguments passed through `args`.
     ///   If `None`, the argument count is considered zero.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * `Ok(String)` - Returns the output of the COFF file execution as a `String` if the execution succeeds.
     /// * `Err(CoffeeLdrError)` - Returns an error if execution fails, wrapped in `CoffeeLdrError`.
     ///
     /// # Examples
-    /// 
+    ///
     /// ```ignore
     /// use coffeeldr::CoffeeLdr;
     ///  
@@ -251,7 +239,7 @@ impl<'a> CoffeeLdr<'a> {
             .map(|o| o.to_string())
             .unwrap_or_default())
     }
-    
+
     /// Prepares the environment for the execution of the COFF file, allocating memory and resolving relocations.
     ///
     /// # Returns
@@ -261,7 +249,7 @@ impl<'a> CoffeeLdr<'a> {
     fn prepare(&mut self) -> Result<()> {
         // Verify that the COFF file's architecture.
         self.check_architecture()?;
-    
+
         // Allocate memory for loading COFF sections and store the allocated section mappings.
         // If module stomping is enabled, overwrite the specified module in memory.
         // Otherwise, allocate standalone memory for the BOF payload.
@@ -270,7 +258,7 @@ impl<'a> CoffeeLdr<'a> {
         } else {
             self.alloc_bof_memory()?
         };
-        
+
         self.section_map = sections;
 
         // Resolve external symbols (such as function addresses) and build a function lookup map.
@@ -283,7 +271,7 @@ impl<'a> CoffeeLdr<'a> {
         };
 
         self.function_map = function_map;
-    
+
         // Process relocations to correctly adjust symbol addresses based on memory layout.
         let mut index = 0;
         for (i, section) in self.coff.sections.iter().enumerate() {
@@ -292,45 +280,34 @@ impl<'a> CoffeeLdr<'a> {
             for relocation in relocations.iter() {
                 // Look up the symbol associated with the relocation.
                 let symbol = &self.coff.symbols[relocation.SymbolTableIndex as usize];
-    
+
                 // Compute the address where the relocation should be applied.
-                let symbol_reloc_addr = (self.section_map[i].base as usize 
-                    + unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
-    
+                let symbol_reloc_addr = (self.section_map[i].base as usize + unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
+
                 // Retrieve the symbol's name (used for function lookups).
                 let name = self.coff.get_symbol_name(symbol);
                 if let Some(function_address) = functions.get(&name).map(|&addr| addr as *mut c_void) {
-                    unsafe { 
-                        self.function_map.address.add(index)
+                    unsafe {
+                        self.function_map
+                            .address
+                            .add(index)
                             .write_volatile(function_address);
 
                         // Apply the relocation using the resolved function address.
-                        self.process_relocation(
-                            symbol_reloc_addr, 
-                            function_address, 
-                            self.function_map.address.add(index), 
-                            relocation, 
-                            symbol
-                        )?;
+                        self.process_relocation(symbol_reloc_addr, function_address, self.function_map.address.add(index), relocation, symbol)?;
                     };
-    
+
                     index += 1;
                 } else {
                     // Apply the relocation but without a resolved function address (null pointer).
-                    self.process_relocation(
-                        symbol_reloc_addr, 
-                        null_mut(), 
-                        null_mut(), 
-                        relocation, 
-                        symbol
-                    )?;
+                    self.process_relocation(symbol_reloc_addr, null_mut(), null_mut(), relocation, symbol)?;
                 }
             }
         }
-    
+
         // Adjust memory permissions for allocated sections (e.g., marking executable sections).
         self.adjust_permissions()?;
-        
+
         Ok(())
     }
 
@@ -473,18 +450,18 @@ impl<'a> CoffeeLdr<'a> {
         let mut size = self.coff.size();
         let mut addr = null_mut();
         let status = NtAllocateVirtualMemory(
-            NtCurrentProcess(),
-            &mut addr,
-            0,
-            &mut size,
-            MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN,
-            PAGE_READWRITE,
+            NtCurrentProcess(), 
+            &mut addr, 
+            0, 
+            &mut size, 
+            MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN, 
+            PAGE_READWRITE
         );
         
         if status != STATUS_SUCCESS {
             return Err(CoffeeLdrError::MemoryAllocationError(unsafe { GetLastError() }));
         }
-        
+
         debug!("Memory successfully allocated for BOF at address: {:?}", addr);
         let (sections, _) = SectionMap::copy_sections(addr, &self.coff);
         Ok((sections, None))
@@ -498,19 +475,28 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Returns
     ///
-    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing the section mappings and the base address used for function resolution.
+    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing the section mappings and the base address 
+    ///   used for function resolution.
     /// * `Err(CoffeeLdrError)` - If the module cannot be found or memory protection cannot be changed.
     fn alloc_with_stomping(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
-        let (mut text_address , mut size) = self.get_text_module()
+        let (mut text_address, mut size) = self
+            .get_text_module()
             .ok_or(CoffeeLdrError::StompingTextSectionNotFound)?;
-        
-        // If the file is larger than the space inside the .text of the target module, we do not stomp
+
+        // If the file is larger than the space inside the .text of the target module,
+        // we do not stomp
         if self.coff.size() > size {
-            return Err(CoffeeLdrError::StompingSizeOverflow)
+            return Err(CoffeeLdrError::StompingSizeOverflow);
         }
 
         let mut old = 0;
-        if !NT_SUCCESS(NtProtectVirtualMemory(NtCurrentProcess(), &mut text_address, &mut size, PAGE_READWRITE, &mut old)) {
+        if !NT_SUCCESS(NtProtectVirtualMemory(
+            NtCurrentProcess(), 
+            &mut text_address, 
+            &mut size, 
+            PAGE_READWRITE, 
+            &mut old
+        )) {
             return Err(CoffeeLdrError::MemoryProtectionError(unsafe { GetLastError() }));
         }
 
@@ -539,7 +525,14 @@ impl<'a> CoffeeLdr<'a> {
         let module = {
             let handle = GetModuleHandle(self.module, None);
             if handle.is_null() {
-                dinvoke!(kernel32, s!("LoadLibraryExA"), LoadLibraryExA, target.as_ptr(), null_mut(), DONT_RESOLVE_DLL_REFERENCES)?
+                dinvoke!(
+                    kernel32,
+                    s!("LoadLibraryExA"),
+                    LoadLibraryExA,
+                    target.as_ptr(),
+                    null_mut(),
+                    DONT_RESOLVE_DLL_REFERENCES
+                )?
             } else {
                 handle
             }
@@ -548,33 +541,39 @@ impl<'a> CoffeeLdr<'a> {
         if module.is_null() {
             return None;
         }
-        
+
         // Retrieving `.text` from the target module
         let pe = PE::parse(module);
         let section = pe.section_by_name(s!(".text"))?;
         let ptr = (module as usize + section.VirtualAddress as usize) as *mut c_void;
         let size = section.SizeOfRawData as usize;
-        
+
         Some((ptr, size))
     }
 
     /// Checks if the COFF file's architecture matches the architecture of the system.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * `Ok(())` - If the COFF architecture matches the system's architecture.
     /// * `Err(CoffeeLdrError)` - If there is a mismatch between the COFF and system architectures.
-    #[inline] 
+    #[inline]
     fn check_architecture(&self) -> Result<()> {
         match self.coff.arch {
             CoffMachine::X32 => {
                 if cfg!(target_pointer_width = "64") {
-                    return Err(CoffeeLdrError::ArchitectureMismatch { expected: "x32", actual: "x64"});
+                    return Err(CoffeeLdrError::ArchitectureMismatch {
+                        expected: "x32",
+                        actual: "x64",
+                    });
                 }
             }
             CoffMachine::X64 => {
                 if cfg!(target_pointer_width = "32") {
-                    return Err(CoffeeLdrError::ArchitectureMismatch { expected: "x64", actual: "x32" });
+                    return Err(CoffeeLdrError::ArchitectureMismatch {
+                        expected: "x64",
+                        actual: "x32",
+                    });
                 }
             }
         }
@@ -587,7 +586,9 @@ impl<'a> CoffeeLdr<'a> {
 impl Drop for CoffeeLdr<'_> {
     fn drop(&mut self) {
         // It doesn't free anything, because we've blocked memory from another module.
-        if self.stomping { return; }
+        if self.stomping {
+            return;
+        }
 
         // Retrive Ntdll
         let ntdll = dinvk::get_ntdll_address();
@@ -598,12 +599,12 @@ impl Drop for CoffeeLdr<'_> {
             // Release memory if the base pointer is not null
             if !section.base.is_null() {
                 dinvoke!(
-                    ntdll, 
-                    s!("NtFreeVirtualMemory"), 
-                    NtFreeVirtualMemory, 
-                    NtCurrentProcess(), 
-                    &mut section.base, 
-                    &mut size, 
+                    ntdll,
+                    s!("NtFreeVirtualMemory"),
+                    NtFreeVirtualMemory,
+                    NtCurrentProcess(),
+                    &mut section.base,
+                    &mut size,
                     MEM_RELEASE
                 );
             }
@@ -614,10 +615,10 @@ impl Drop for CoffeeLdr<'_> {
             dinvoke!(
                 ntdll,
                 s!("NtFreeVirtualMemory"),
-                NtFreeVirtualMemory, 
-                NtCurrentProcess(), 
-                &mut *self.function_map.address, 
-                &mut size, 
+                NtFreeVirtualMemory,
+                NtCurrentProcess(),
+                &mut *self.function_map.address,
+                &mut size,
                 MEM_RELEASE
             );
         }
@@ -638,12 +639,12 @@ impl FunctionMap {
     /// Creates a new `FunctionMap` and resolves external symbols for the given COFF file.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `coff` - A reference to the parsed COFF object.
     ///
     /// # Returns
-    /// 
-    /// * `Ok((BTreeMap<String, usize>, FunctionMap))` - A tuple containing the resolved symbols and 
+    ///
+    /// * `Ok((BTreeMap<String, usize>, FunctionMap))` - A tuple containing the resolved symbols and
     ///   function map, with each symbol's name mapped to its resolved address.
     /// * `Err(CoffeeLdrError)` - If memory allocation fails or symbol resolution exceeds the limit.
     fn new(coff: &Coff) -> Result<(BTreeMap<String, usize>, FunctionMap)> {
@@ -651,20 +652,20 @@ impl FunctionMap {
         let mut size = MAX_SYMBOLS * size_of::<*mut c_void>();
         let mut addr = null_mut::<c_void>();
         let status = NtAllocateVirtualMemory(
-            NtCurrentProcess(),
-            &mut addr,
-            0,
-            &mut size,
-            MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN,
-            PAGE_READWRITE,
+            NtCurrentProcess(), 
+            &mut addr, 
+            0, 
+            &mut size, 
+            MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN, 
+            PAGE_READWRITE
         );
-
+        
         if addr.is_null() || status != STATUS_SUCCESS {
-            return Err(CoffeeLdrError::MemoryAllocationError(unsafe { GetLastError() }))
+            return Err(CoffeeLdrError::MemoryAllocationError(unsafe { GetLastError() }));
         }
 
         let address = addr as *mut *mut c_void;
-        Ok((symbols, FunctionMap { address  }))
+        Ok((symbols, FunctionMap { address }))
     }
 
     /// Creates a `FunctionMap` using a specified base address for symbol resolution.
@@ -681,17 +682,22 @@ impl FunctionMap {
     /// * `Err(CoffeeLdrError)` - If symbol processing fails.
     pub fn with_address(coff: &Coff, addr: *mut c_void) -> Result<(BTreeMap<String, usize>, FunctionMap)> {
         let symbols = Self::process_symbols(coff)?;
-        Ok((symbols, FunctionMap { address: addr as *mut *mut c_void }))
+        Ok((
+            symbols,
+            FunctionMap {
+                address: addr as *mut *mut c_void,
+            },
+        ))
     }
 
     /// Processes the external symbols in the COFF file and resolves their addresses.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `coff` - A reference to the COFF file whose symbols are to be processed.
     ///
     /// # Returns
-    /// 
+    ///
     /// * `Ok(BTreeMap<String, usize>)` - A map of symbol names to their resolved addresses.
     /// * `Err(CoffeeLdrError)` - If symbol resolution fails or the number of symbols exceeds the limit.
     fn process_symbols(coff: &Coff) -> Result<BTreeMap<String, usize>> {
@@ -715,28 +721,34 @@ impl FunctionMap {
     /// Resolves the address of a symbol by looking it up in the appropriate DLL.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `name` - The name of the symbol to resolve.
     /// * `coff` - A reference to the COFF file (used to determine the architecture).
     ///
     /// # Returns
-    /// 
+    ///
     /// * `Ok(usize)` - The resolved address of the symbol.
     /// * `Err(CoffeeLdrError)` - If the symbol cannot be found or resolution fails.
     fn resolve_symbol_address(name: &str, coff: &Coff) -> Result<usize> {
         debug!("Attempting to resolve address for symbol: {}", name);
-        let prefix = match coff.arch { 
+        let prefix = match coff.arch {
             CoffMachine::X64 => "__imp_",
-            CoffMachine::X32 => "__imp__" 
+            CoffMachine::X32 => "__imp__",
         };
 
-        let symbol_name = name.strip_prefix(prefix).map_or_else(|| Err(CoffeeLdrError::SymbolIgnored), Ok)?;
+        let symbol_name = name
+            .strip_prefix(prefix)
+            .map_or_else(|| Err(CoffeeLdrError::SymbolIgnored), Ok)?;
+
         if symbol_name.starts_with(s!("Beacon")) || symbol_name.starts_with(s!("toWideChar")) {
             debug!("Resolving Beacon: {}", symbol_name);
             return get_function_internal_address(symbol_name);
         }
 
-        let (dll, mut function) = symbol_name.split_once('$').ok_or_else(|| CoffeeLdrError::ParseError(symbol_name.to_string()))?;
+        let (dll, mut function) = symbol_name
+            .split_once('$')
+            .ok_or_else(|| CoffeeLdrError::ParseError(symbol_name.to_string()))?;
+
         if let CoffMachine::X32 = coff.arch {
             function = function.split('@').next().unwrap_or(function);
         }
@@ -781,10 +793,10 @@ impl Default for FunctionMap {
 struct SectionMap {
     /// Base address of the section.
     pub base: *mut c_void,
-    
+
     /// Section size in bytes.
     pub size: usize,
-    
+
     /// Section characteristics (e.g. execute, read, write permissions).
     pub characteristics: u32,
 
@@ -799,9 +811,9 @@ impl SectionMap {
     ///
     /// * `virt_addr` - Virtual memory address where the sections will be copied.
     /// * `coff` - Coff structure that will take the information from the sections.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * A vector containing the mapping of each section.
     fn copy_sections(virt_addr: *mut c_void, coff: &Coff) -> (Vec<SectionMap>, *mut c_void) {
         unsafe {
@@ -816,12 +828,17 @@ impl SectionMap {
 
                     if section.PointerToRawData != 0 {
                         debug!("Copying section: {}", name);
-                        volatile_copy_nonoverlapping_memory(base as *mut u8, address.cast_mut(), size);    
+                        volatile_copy_nonoverlapping_memory(base as *mut u8, address.cast_mut(), size);
                     } else {
                         volatile_set_memory(address.cast_mut(), 0, size);
                     }
 
-                    let section_map = SectionMap { base, size, characteristics: section.Characteristics, name};
+                    let section_map = SectionMap {
+                        base,
+                        size,
+                        characteristics: section.Characteristics,
+                        name,
+                    };
                     base = Coff::page_align((base as usize) + size) as *mut c_void;
 
                     section_map
@@ -831,7 +848,7 @@ impl SectionMap {
             (sections, base)
         }
     }
-    
+
     /// Set the memory permissions for each section loaded.
     ///
     /// # Returns
@@ -839,7 +856,8 @@ impl SectionMap {
     /// * `Ok(())` - If the permissions were adjusted successfully.
     /// * `Err(CoffeeLdrError)` - If an error occurs while adjusting permissions.
     fn adjust_permissions(&mut self) -> Result<()> {
-        info!("Adjusting memory permissions for section: Name = {}, Address = {:?}, Size = {}, Characteristics = 0x{:X}", 
+        info!(
+            "Adjusting memory permissions for section: Name = {}, Address = {:?}, Size = {}, Characteristics = 0x{:X}",
             self.name, self.base, self.size, self.characteristics
         );
 
@@ -864,13 +882,19 @@ impl SectionMap {
             warn!("Unknown protection, using PAGE_EXECUTE_READWRITE");
             PAGE_EXECUTE_READWRITE
         };
-        
+
         if (protection & IMAGE_SCN_MEM_NOT_CACHED) == IMAGE_SCN_MEM_NOT_CACHED {
             protection |= PAGE_NOCACHE;
         }
 
         let mut old = 0;
-        if !NT_SUCCESS(NtProtectVirtualMemory(NtCurrentProcess(), &mut self.base, &mut self.size, protection, &mut old)) {
+        if !NT_SUCCESS(NtProtectVirtualMemory(
+            NtCurrentProcess(), 
+            &mut self.base, 
+            &mut self.size, 
+            protection, 
+            &mut old
+        )) {
             return Err(CoffeeLdrError::MemoryProtectionError(unsafe { GetLastError() }));
         }
 

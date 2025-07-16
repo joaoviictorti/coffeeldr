@@ -1,40 +1,32 @@
 #![allow(non_snake_case)]
 
-use spin::Mutex;
-use obfstr::obfstr as s;
-use super::{error::CoffeeLdrError, Result};
-use alloc::{string::{String, ToString}, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::{
-    ffi::{c_void, CStr},
-    fmt, alloc::Layout,
-    ptr::{null_mut, self},
-    ffi::{c_char, c_int, c_short}, 
+    alloc::Layout,
+    ffi::{CStr, c_void},
+    ffi::{c_char, c_int, c_short},
+    fmt,
+    ptr::{self, null_mut},
 };
 
-use dinvk::{
-    data::OBJECT_ATTRIBUTES, 
-    hash::jenkins3, syscall, 
-    NtCurrentProcess
-};
+use spin::Mutex;
+use obfstr::obfstr as s;
+use dinvk::{NtCurrentProcess, syscall};
+use dinvk::{data::OBJECT_ATTRIBUTES, hash::jenkins3};
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, HANDLE, STATUS_SUCCESS}, 
-    Security::{
-        GetTokenInformation, RevertToSelf, 
-        TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY
-    }, 
-    System::{ 
+    Security::*,
+    Foundation::{CloseHandle, HANDLE, STATUS_SUCCESS},
+    System::{
+        Memory::{MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READWRITE},
+        Threading::*,
         WindowsProgramming::CLIENT_ID,
-        Memory::{
-            MEM_COMMIT, MEM_RESERVE,
-            PAGE_EXECUTE_READWRITE
-        }, 
-        Threading::{
-            OpenProcessToken, SetThreadToken, 
-            PROCESS_ALL_ACCESS, PROCESS_INFORMATION, 
-            STARTUPINFOA, THREAD_ALL_ACCESS
-        },
-    }
+    },
 };
+
+use super::error::{CoffeeLdrError, Result};
 
 #[allow(dead_code)]
 const CALLBACK_OUTPUT: u32 = 0x0;
@@ -60,8 +52,8 @@ impl BeaconOutputBuffer {
     /// Creates a new, empty `BeaconOutputBuffer`.
     ///
     /// # Returns
-    /// 
-    /// * A new instance of `BeaconOutputBuffer` with an empty internal buffer. 
+    ///
+    /// * A new instance of `BeaconOutputBuffer` with an empty internal buffer.
     const fn new() -> Self {
         Self { buffer: Vec::new() }
     }
@@ -69,7 +61,7 @@ impl BeaconOutputBuffer {
     /// Appends a raw C-style string to the buffer.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `s` - A pointer to a C-style string (`c_char`).
     /// * `len` - The length of the string to append.
     fn append_char(&mut self, s: *mut c_char, len: c_int) {
@@ -83,7 +75,7 @@ impl BeaconOutputBuffer {
     /// Appends a Rust `&str` to the buffer.
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `s` - A reference to a Rust string slice (`&str`).
     fn append_string(&mut self, s: &str) {
         self.buffer.extend(s.bytes().map(|b| b as c_char));
@@ -92,14 +84,14 @@ impl BeaconOutputBuffer {
     /// Retrieves the current buffer and its size, then clears it.
     ///
     /// # Returns
-    /// 
+    ///
     /// A tuple containing:
     /// * A pointer to the buffer (`*mut c_char`).
-    /// * The size of the buffer (`usize`). 
+    /// * The size of the buffer (`usize`).
     fn get_output(&mut self) -> (*mut c_char, usize) {
         let size = self.buffer.len();
         let ptr = self.buffer.as_mut_ptr();
-        self.buffer.clear(); 
+        self.buffer.clear();
         (ptr, size)
     }
 
@@ -113,10 +105,11 @@ impl fmt::Display for BeaconOutputBuffer {
     /// Converts the internal buffer into a Rust `String`.
     ///
     /// # Returns
-    /// 
+    ///
     /// * A `String` containing the formatted output from the buffer.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let string = self.buffer
+        let string = self
+            .buffer
             .iter()
             .map(|&c| if c as u8 == 0 { '\n' } else { c as u8 as char })
             .collect::<String>();
@@ -129,15 +122,15 @@ impl fmt::Display for BeaconOutputBuffer {
 struct Data {
     /// The original buffer [so we can free it]
     original: *mut c_char,
-    
+
     /// Current pointer into our buffer
     buffer: *mut c_char,
 
-    /// Remaining length of data 
+    /// Remaining length of data
     length: c_int,
-    
+
     /// Total size of this buffer
-    size: c_int
+    size: c_int,
 }
 
 #[repr(C)]
@@ -145,15 +138,15 @@ struct Data {
 struct Format {
     /// The original buffer [so we can free it]
     original: *mut c_char,
-    
+
     /// Current pointer into our buffer
     buffer: *mut c_char,
 
-    /// Remaining length of data 
+    /// Remaining length of data
     length: c_int,
-    
+
     /// Total size of this buffer
-    size: c_int
+    size: c_int,
 }
 
 /// Retrieves the internal address of a function by name.
@@ -170,21 +163,21 @@ pub fn get_function_internal_address(name: &str) -> Result<usize> {
     match jenkins3(name) {
         // Output
         3210322847u32 => Ok(BeaconPrintf as usize),
-        358755801u32  => Ok(BeaconOutput as usize),
+        358755801u32 => Ok(BeaconOutput as usize),
         2979319955u32 => Ok(BeaconGetOutputData as usize),
-        
+
         // Token
         3202664826u32 => Ok(BeaconIsAdmin as usize),
-        233171701u32  => Ok(BeaconUseToken as usize),
+        233171701u32 => Ok(BeaconUseToken as usize),
         2754379686u32 => Ok(BeaconRevertToken as usize),
-        
+
         // Format
         1870274128u32 => Ok(BeaconFormatInt as usize),
         1617256401u32 => Ok(BeaconFormatFree as usize),
-        687949845u32  => Ok(BeaconFormatAlloc as usize),
-        305071883u32  => Ok(BeaconFormatReset as usize),
+        687949845u32 => Ok(BeaconFormatAlloc as usize),
+        305071883u32 => Ok(BeaconFormatReset as usize),
         2824797381u32 => Ok(BeaconFormatPrintf as usize),
-        814630661u32  => Ok(BeaconFormatAppend as usize),
+        814630661u32 => Ok(BeaconFormatAppend as usize),
         2821454172u32 => Ok(BeaconFormatToString as usize),
 
         // Process and injection-related operations
@@ -192,20 +185,20 @@ pub fn get_function_internal_address(name: &str) -> Result<usize> {
         1991785755u32 => Ok(BeaconInjectProcess as usize),
         2335479872u32 => Ok(BeaconCleanupProcess as usize),
         2755057638u32 => Ok(BeaconSpawnTemporaryProcess as usize),
-        131483084u32  => Ok(BeaconInjectTemporaryProcess as usize),
+        131483084u32 => Ok(BeaconInjectTemporaryProcess as usize),
 
         // Data
         1942020652u32 => Ok(BeaconDataInt as usize),
         1136370979u32 => Ok(BeaconDataShort as usize),
-        709123669u32  => Ok(BeaconDataParse as usize),
+        709123669u32 => Ok(BeaconDataParse as usize),
         2194280572u32 => Ok(BeaconDataLength as usize),
-        596399976u32  => Ok(BeaconDataExtract as usize),
-        275872794u32  => Ok(BeaconDataPtr as usize),
+        596399976u32 => Ok(BeaconDataExtract as usize),
+        275872794u32 => Ok(BeaconDataPtr as usize),
 
         // Utility functions
         2580203873u32 => Ok(toWideChar as usize),
         3816160102u32 => Ok(0),
-        _ =>  Err(CoffeeLdrError::FunctionInternalNotFound(name.to_string()))
+        _ => Err(CoffeeLdrError::FunctionInternalNotFound(name.to_string())),
     }
 }
 
@@ -303,10 +296,10 @@ fn BeaconFormatInt(format: *mut Format, value: c_int) {
         if (*format).length + 4 > (*format).size {
             return;
         }
-    
+
         let outdata = swap_endianness(value as u32).to_be_bytes();
         ptr::copy_nonoverlapping(outdata.as_ptr(), (*format).buffer as *mut u8, 4);
-    
+
         (*format).buffer = (*format).buffer.add(4);
         (*format).length += 4;
     }
@@ -328,7 +321,7 @@ fn BeaconFormatAppend(format: *mut Format, text: *const c_char, len: c_int) {
         if (*format).length + len > (*format).size {
             return;
         }
-     
+
         ptr::copy_nonoverlapping(text, (*format).buffer, len as usize);
         (*format).buffer = (*format).buffer.add(len as usize);
         (*format).length += len;
@@ -363,7 +356,7 @@ fn BeaconFormatFree(format: *mut Format) {
 /// Formats and appends a string to a `Format` buffer using a format string and arguments.
 ///
 /// # Arguments
-/// 
+///
 /// * `format` - Pointer to the `Format` struct holding the buffer.
 /// * `fmt` - Pointer to the C-style format string (`*const c_char`).
 /// * `args` - Variable arguments used in formatting.
@@ -375,7 +368,7 @@ unsafe extern "C" fn BeaconFormatPrintf(format: *mut Format, fmt: *const c_char,
 
     let fmt_str = CStr::from_ptr(fmt).to_str().unwrap_or("");
     let mut temp_str = String::new();
-    
+
     printf_compat::format(fmt_str.as_ptr().cast(), args.as_va_list(), printf_compat::output::fmt_write(&mut temp_str));
 
     let length_needed = temp_str.len() as c_int;
@@ -386,7 +379,7 @@ unsafe extern "C" fn BeaconFormatPrintf(format: *mut Format, fmt: *const c_char,
     ptr::copy_nonoverlapping(
         temp_str.as_ptr() as *const c_char,
         (*format).buffer.add((*format).length as usize),
-        length_needed as usize
+        length_needed as usize,
     );
 
     (*format).length += length_needed;
@@ -419,13 +412,13 @@ fn BeaconDataShort(data: *mut Data) -> c_short {
 }
 
 /// Extracts a 4-byte integer from the data buffer.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `data` - A pointer to the `Data` struct containing the buffer.
-/// 
+///
 /// # Returns
-/// 
+///
 /// * The extracted integer, or 0 if extraction fails.
 fn BeaconDataInt(data: *mut Data) -> c_int {
     if data.is_null() {
@@ -445,21 +438,21 @@ fn BeaconDataInt(data: *mut Data) -> c_int {
 }
 
 /// Extracts a variable-length data buffer from the `Data` struct.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `data` - A pointer to the `Data` struct containing the buffer.
 /// * `size` - A mutable pointer to store the size of the extracted data.
-/// 
+///
 /// # Returns
-/// 
+///
 /// * Pointer to the extracted data, or `null_mut()` if extraction fails.
 fn BeaconDataExtract(data: *mut Data, size: *mut c_int) -> *mut c_char {
     if data.is_null() {
         return null_mut();
     }
-    
-    let parser= unsafe { &mut *data };
+
+    let parser = unsafe { &mut *data };
     if parser.length < 4 {
         return null_mut();
     }
@@ -482,9 +475,9 @@ fn BeaconDataExtract(data: *mut Data, size: *mut c_int) -> *mut c_char {
 }
 
 /// Initializes the data parser by setting the buffer and size.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `data` - A pointer to the `Data` struct to be initialized.
 /// * `buffer` - A pointer to the buffer to be parsed.
 /// * `size` - The size of the buffer in bytes.
@@ -502,32 +495,30 @@ fn BeaconDataParse(data: *mut Data, buffer: *mut c_char, size: c_int) {
 }
 
 /// Returns the current length of the data buffer.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `data` - A constant pointer to the `Data` struct.
-/// 
+///
 /// # Returns
-/// 
+///
 /// * The remaining length of the buffer.
 fn BeaconDataLength(data: *const Data) -> c_int {
     if data.is_null() {
         return 0;
     }
 
-    unsafe { 
-        (*data).length 
-    }
+    unsafe { (*data).length }
 }
 
 /// Retrieves the output data and its size from an internal buffer.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `outsize` - A mutable pointer to store the size of the output data.
-/// 
+///
 /// # Returns
-/// 
+///
 /// * Pointer to the output data, or `null_mut()` if retrieval fails.
 fn BeaconGetOutputData(outsize: *mut c_int) -> *mut c_char {
     unsafe {
@@ -543,9 +534,9 @@ fn BeaconGetOutputData(outsize: *mut c_int) -> *mut c_char {
 }
 
 /// Appends output data to an internal buffer.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `_type` - An integer representing the type of data being output.
 /// * `data` - A pointer to the output data.
 /// * `len` - The length of the output data.
@@ -555,15 +546,15 @@ fn BeaconOutput(_type: c_int, data: *mut c_char, len: c_int) {
 }
 
 /// Prints formatted output to an internal buffer.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `_type` - The type of output.
 /// * `fmt` - A format string.
 /// * `args` - Variable arguments list for formatting.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn BeaconPrintf(_type: c_int, fmt: *mut c_char, mut args: ...) {
-   let mut str = String::new();
+    let mut str = String::new();
     printf_compat::format(fmt, args.as_va_list(), printf_compat::output::fmt_write(&mut str));
     str.push('\0');
 
@@ -572,33 +563,33 @@ unsafe extern "C" fn BeaconPrintf(_type: c_int, fmt: *mut c_char, mut args: ...)
 }
 
 /// Reverts the current process token to its original state.
-/// 
+///
 /// This function attempts to revert the current process token and logs a warning if it fails.
 fn BeaconRevertToken() {
     unsafe {
-        if RevertToSelf() == 0 {   
+        if RevertToSelf() == 0 {
             super::warn!("RevertToSelf Failed!")
         }
     }
 }
 
 /// Sets the current thread token.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `token` - A handle to the token to be applied to the current thread.
-/// 
+///
 /// # Returns
-/// 
+///
 /// *  Returns a non-zero value on success, or 0 on failure.
 fn BeaconUseToken(token: HANDLE) -> i32 {
     unsafe { SetThreadToken(null_mut(), token) }
 }
 
 /// Cleans up a process by closing its handles.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * A pointer to a `PROCESS_INFORMATION` struct containing process handles.
 fn BeaconCleanupProcess(info: *const PROCESS_INFORMATION) {
     unsafe {
@@ -608,26 +599,27 @@ fn BeaconCleanupProcess(info: *const PROCESS_INFORMATION) {
 }
 
 /// Checks if the current process is running with elevated privileges (as an admin).
-/// 
+///
 /// # Returns
-/// 
+///
 /// * Returns 1 if the process is elevated, otherwise 0.
 fn BeaconIsAdmin() -> u32 {
     let mut h_token = null_mut();
-    
+
     unsafe {
-        if OpenProcessToken(NtCurrentProcess(), TOKEN_QUERY, &mut h_token) != 0 { 
+        if OpenProcessToken(NtCurrentProcess(), TOKEN_QUERY, &mut h_token) != 0 {
             let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
             let mut return_length = 0;
 
             if GetTokenInformation(
-                h_token, 
-                TokenElevation, 
-                &mut elevation as *mut _ as *mut c_void, 
-                size_of::<TOKEN_ELEVATION>() as u32, 
-                &mut return_length
-            ) != 0 {
-                return (elevation.TokenIsElevated == 1) as u32
+                h_token,
+                TokenElevation,
+                &mut elevation as *mut _ as *mut c_void,
+                size_of::<TOKEN_ELEVATION>() as u32,
+                &mut return_length,
+            ) != 0
+            {
+                return (elevation.TokenIsElevated == 1) as u32;
             }
         }
     }
@@ -636,13 +628,13 @@ fn BeaconIsAdmin() -> u32 {
 }
 
 /// Swaps the endianness of a 32-bit unsigned integer.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `src` - A 32-bit unsigned integer to be converted.
-/// 
+///
 /// # Returns
-/// 
+///
 /// * The integer with swapped endianness.
 fn swap_endianness(src: u32) -> u32 {
     // Check if the system is little-endian
@@ -656,16 +648,16 @@ fn swap_endianness(src: u32) -> u32 {
 }
 
 /// Converts a C-style string to a wide character (UTF-16) string.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `src` - A pointer to the source C-style string.
 /// * `dst` - A pointer to the destination buffer for wide characters.
 /// * `max` - The maximum size of the destination buffer in bytes.
-/// 
+///
 /// # Returns
-/// 
-/// * Returns 1 on success or 0 on failure. 
+///
+/// * Returns 1 on success or 0 on failure.
 fn toWideChar(src: *const c_char, dst: *mut u16, max: c_int) -> c_int {
     if src.is_null() || dst.is_null() || max < size_of::<u16>() as c_int {
         return 0;
@@ -674,12 +666,11 @@ fn toWideChar(src: *const c_char, dst: *mut u16, max: c_int) -> c_int {
     unsafe {
         // Converting the `src` pointer to a C string (`CStr`)
         let c_str = CStr::from_ptr(src);
-        
+
         // Converts CStr to a Rust string (&str)
         if let Ok(str_slice) = c_str.to_str() {
-
             // Encoding a Rust string as UTF-16
-            let utf16_chars  = str_slice.encode_utf16().collect::<Vec<u16>>();
+            let utf16_chars = str_slice.encode_utf16().collect::<Vec<u16>>();
             let dst_slice = core::slice::from_raw_parts_mut(dst, (max as usize) / size_of::<u16>());
 
             let num_chars = utf16_chars.len();
@@ -699,9 +690,9 @@ fn toWideChar(src: *const c_char, dst: *mut u16, max: c_int) -> c_int {
 }
 
 /// Injects a payload into a remote process.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `_h_process` - A handle to the target process.
 /// * `pid` - The process ID of the target process.
 /// * `payload` - A pointer to the payload data to be injected.
@@ -721,7 +712,7 @@ fn BeaconInjectProcess(
     if payload.is_null() || len <= 0 {
         return;
     }
-    
+
     unsafe {
         let mut oa = OBJECT_ATTRIBUTES::default();
         let mut ci = CLIENT_ID {
@@ -738,12 +729,12 @@ fn BeaconInjectProcess(
         let mut size = len as usize;
         let mut address = null_mut::<c_void>();
         let mut status = syscall!(
-            s!("NtAllocateVirtualMemory"), 
-            h_process, 
-            &mut address, 
-            0, 
-            &mut size, 
-            MEM_COMMIT | MEM_RESERVE, 
+            s!("NtAllocateVirtualMemory"),
+            h_process,
+            &mut address,
+            0,
+            &mut size,
+            MEM_COMMIT | MEM_RESERVE,
             PAGE_EXECUTE_READWRITE
         );
 
@@ -751,27 +742,27 @@ fn BeaconInjectProcess(
             CloseHandle(h_process);
             return;
         }
-         
+
         let mut now = 0usize;
         status = syscall!(s!("NtWriteVirtualMemory"), h_process, address, payload as *const c_void, len as usize, &mut now);
         if status != Some(STATUS_SUCCESS) {
             CloseHandle(h_process);
             return;
         }
-        
+
         let mut h_thread = null_mut::<c_void>();
         status = syscall!(
-            s!("NtCreateThreadEx"), 
-            &mut h_thread, 
-            THREAD_ALL_ACCESS, 
-            null_mut::<c_void>(), 
-            h_process, 
-            address, 
-            null_mut::<c_void>(), 
-            0usize, 
-            0usize, 
-            0usize, 
-            0usize, 
+            s!("NtCreateThreadEx"),
+            &mut h_thread,
+            THREAD_ALL_ACCESS,
+            null_mut::<c_void>(),
+            h_process,
+            address,
+            null_mut::<c_void>(),
+            0usize,
+            0usize,
+            0usize,
+            0usize,
             null_mut::<c_void>()
         );
 
@@ -813,12 +804,24 @@ fn BeaconDataPtr(data: *mut Data, size: c_int) -> *mut c_char {
 }
 
 /// Leaving this to be implemented by people needing/wanting it
-fn BeaconInjectTemporaryProcess(_info: *const PROCESS_INFORMATION, _payload: *const c_char, _len: c_int, _offset: c_int, _arg: *const c_char, _a_len: c_int) {
+fn BeaconInjectTemporaryProcess(
+    _info: *const PROCESS_INFORMATION,
+    _payload: *const c_char,
+    _len: c_int,
+    _offset: c_int,
+    _arg: *const c_char,
+    _a_len: c_int,
+) {
     unimplemented!()
 }
 
 /// Leaving this to be implemented by people needing/wanting it
-fn BeaconSpawnTemporaryProcess(_x86: i32, _ignore_token: i32, _s_info: *mut STARTUPINFOA, _p_info: *mut PROCESS_INFORMATION) {
+fn BeaconSpawnTemporaryProcess(
+    _x86: i32, 
+    _ignore_token: i32, 
+    _s_info: *mut STARTUPINFOA, 
+    _p_info: *mut PROCESS_INFORMATION
+) {
     unimplemented!()
 }
 

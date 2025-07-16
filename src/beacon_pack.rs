@@ -27,7 +27,7 @@ impl BeaconPack {
         let mut buf = Vec::with_capacity(4 + self.buffer.len());
         buf.extend_from_slice(&self.size.to_le_bytes());
         buf.extend_from_slice(&self.buffer);
-        
+
         Ok(buf)
     }
 
@@ -55,7 +55,7 @@ impl BeaconPack {
     pub fn addshort(&mut self, short: i16) -> Result<()> {
         self.write_i16(short);
         self.size += 2;
-        
+
         Ok(())
     }
 
@@ -72,7 +72,7 @@ impl BeaconPack {
     pub fn addint(&mut self, int: i32) -> Result<()> {
         self.write_i32(int);
         self.size += 4;
-        
+
         Ok(())
     }
 
@@ -120,7 +120,7 @@ impl BeaconPack {
         for wchar in s_wide {
             self.write_u16(wchar);
         }
-        
+
         self.write_u16(0);
         self.size += 4 + length;
 
@@ -144,7 +144,7 @@ impl BeaconPack {
         self.write_u32(length);
         self.buffer.write_all(data)?;
         self.size += 4 + length;
-        
+
         Ok(())
     }
 
@@ -189,9 +189,6 @@ impl Default for BeaconPack {
     ///
     /// * A default-initialized `BeaconPack`.
     fn default() -> Self {
-        Self {
-            buffer: Vec::new(),
-            size: 0,
-        }
+        Self { buffer: Vec::new(), size: 0 }
     }
 }

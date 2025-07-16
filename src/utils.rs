@@ -1,14 +1,17 @@
 use core::ptr::null_mut;
+use alloc::{ffi::CString, string::String, vec, vec::Vec};
+
 use obfstr::obfstring as s;
-use crate::{error::CoffeeLdrError, Result};
-use alloc::{ffi::CString, vec::Vec, vec, string::String};
 use windows_sys::Win32::{
-    Foundation::{GENERIC_READ, INVALID_HANDLE_VALUE}, 
+    Foundation::{GENERIC_READ, INVALID_HANDLE_VALUE},
     Storage::FileSystem::{
-        CreateFileA, GetFileSize, ReadFile, FILE_ATTRIBUTE_NORMAL, 
-        FILE_SHARE_READ, INVALID_FILE_SIZE, OPEN_EXISTING
-    }
+        CreateFileA, FILE_ATTRIBUTE_NORMAL, 
+        FILE_SHARE_READ, GetFileSize, INVALID_FILE_SIZE, 
+        OPEN_EXISTING, ReadFile
+    },
 };
+
+use crate::{error::CoffeeLdrError, error::Result};
 
 /// Reads the entire contents of a file into memory using the Windows API.
 ///
@@ -22,7 +25,7 @@ use windows_sys::Win32::{
 /// `CoffeeLdrError::GenericError` if any step fails.
 pub fn read_file(name: &str) -> Result<Vec<u8>> {
     let file_name = CString::new(name).map_err(|_| CoffeeLdrError::GenericError(s!("Invalid cstring")))?;
-    let h_file = unsafe { 
+    let h_file = unsafe {
         CreateFileA(
             file_name.as_ptr().cast(),
             GENERIC_READ,
@@ -30,7 +33,7 @@ pub fn read_file(name: &str) -> Result<Vec<u8>> {
             null_mut(),
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL,
-            null_mut()
+            null_mut(),
         )
     };
 
@@ -46,7 +49,13 @@ pub fn read_file(name: &str) -> Result<Vec<u8>> {
     let mut out = vec![0u8; size as usize];
     let mut bytes = 0;
     unsafe {
-        ReadFile(h_file, out.as_mut_ptr(), out.len() as u32, &mut bytes, null_mut());
+        ReadFile(
+            h_file,
+            out.as_mut_ptr(),
+            out.len() as u32,
+            &mut bytes,
+            null_mut(),
+        );
     }
 
     Ok(out)

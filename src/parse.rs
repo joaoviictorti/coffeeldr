@@ -1,11 +1,16 @@
 #![allow(non_snake_case, non_camel_case_types)]
 
-use alloc::{string::{String, ToString}, vec::Vec};
-use binrw::{binread, BinRead};
-use crate::{warn, debug};
-use super::error::CoffError;
-use core::ffi::{c_void, CStr};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
+
+use core::ffi::{CStr, c_void};
+use binrw::{BinRead, binread};
 use binrw::io::Cursor;
+
+use super::{debug, warn};
+use super::error::CoffError;
 
 // Architecture definitions for x64
 const COFF_MACHINE_X64: u16 = 0x8664;
@@ -21,16 +26,16 @@ const MAX_SECTIONS: u16 = 96;
 pub struct Coff<'a> {
     //// The COFF file header (`IMAGE_FILE_HEADER`).
     pub file_header: IMAGE_FILE_HEADER,
-    
+
     // A vector of COFF symbols (`IMAGE_SYMBOL`).
     pub symbols: Vec<IMAGE_SYMBOL>,
-    
+
     /// A vector of section headers (`IMAGE_SECTION_HEADER`).
     pub sections: Vec<IMAGE_SECTION_HEADER>,
-    
+
     /// The raw contents of the file read into memory
     pub buffer: &'a [u8],
-    
+
     /// Architecture of the COFF File (x64 or x32)
     pub arch: CoffMachine,
 }
@@ -47,20 +52,20 @@ impl<'a> Default for Coff<'a> {
             symbols: Vec::new(),
             sections: Vec::new(),
             buffer: &[],
-            arch: CoffMachine::X64
+            arch: CoffMachine::X64,
         }
     }
 }
 
 impl<'a> Coff<'a> {
     /// Creates a new instance of the `Coff` structure from a given file.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `buffer` - Buffer of the Coff file to be analyzed.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * `Ok(Self)` - Returns a `Coff` instance if parsing succeeds.
     /// * `Err(CoffError)` - If parsing fails due to an invalid buffer or file structure.
     pub fn from_buffer(buffer: &'a [u8]) -> Result<Self, CoffError> {
@@ -76,10 +81,10 @@ impl<'a> Coff<'a> {
     /// * `buffer` - Buffer of the Coff file to be analyzed.
     ///
     /// # Returns
-    /// 
+    ///
     /// * `Ok(Self)` - If the buffer is successfully parsed into a `Coff` structure.
     /// * `Err(CoffError)` - If parsing fails due to invalid file structure or errors in the buffer.
-    fn parse(buffer: &'a [u8]) -> Result<Self, CoffError> {        
+    fn parse(buffer: &'a [u8]) -> Result<Self, CoffError> {
         debug!("Parsing COFF file header, buffer size: {}", buffer.len());
 
         // Validates that the file has the minimum size to contain a COFF header
@@ -119,7 +124,7 @@ impl<'a> Coff<'a> {
                     .map_err(|_| CoffError::InvalidCoffSymbolsFile)
             })
             .collect::<Result<Vec<IMAGE_SYMBOL>, _>>()?;
-        
+
         // A vector of COFF sections
         let section_offset = size_of::<IMAGE_FILE_HEADER>() + file_header.SizeOfOptionalHeader as usize;
         let mut section_cursor = Cursor::new(&buffer[section_offset..]);
@@ -146,7 +151,7 @@ impl<'a> Coff<'a> {
     /// * `file_header` - The COFF file header.
     ///
     /// # Returns
-    /// 
+    ///
     /// * `Ok(CoffMachine)` - The COFF architecture (`X64` or `X32`).
     /// * `Err(CoffError)` - If the architecture is not supported.
     #[inline]
@@ -155,41 +160,45 @@ impl<'a> Coff<'a> {
             COFF_MACHINE_X64 => Ok(CoffMachine::X64),
             COFF_MACHINE_X32 => Ok(CoffMachine::X32),
             _ => {
-                warn!("Unsupported COFF architecture: {:?}", file_header.Machine); 
+                warn!("Unsupported COFF architecture: {:?}", file_header.Machine);
                 Err(CoffError::UnsupportedArchitecture)
-            },
+            }
         }
     }
 
     /// Calculates the total size of the image, including alignment and symbol relocation.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * The total aligned size of the COFF image.
     pub fn size(&self) -> usize {
-        let length = self.sections
+        let length = self
+            .sections
             .iter()
             .filter(|section| section.SizeOfRawData > 0)
             .map(|section| Self::page_align(section.SizeOfRawData as usize))
             .sum();
 
-        let total_length = self.sections.iter().fold(length, |mut total_length, section| {
-            let relocations = self.get_relocations(section);
-            relocations.iter().for_each(|relocation| {
-                let sym = &self.symbols[relocation.SymbolTableIndex as usize];
-                let name = self.get_symbol_name(sym);
-                if name.starts_with("__imp_") {
-                    total_length += size_of::<*const c_void>();
-                }
-            });
+        let total_length = self
+            .sections
+            .iter()
+            .fold(length, |mut total_length, section| {
+                let relocations = self.get_relocations(section);
+                relocations.iter().for_each(|relocation| {
+                    let sym = &self.symbols[relocation.SymbolTableIndex as usize];
+                    let name = self.get_symbol_name(sym);
+                    if name.starts_with("__imp_") {
+                        total_length += size_of::<*const c_void>();
+                    }
+                });
 
-            total_length
-        });
+                total_length
+            });
 
         debug!("Total image size after alignment: {} bytes", total_length);
         Self::page_align(total_length)
     }
-    
+
     /// Returns the relocation entries for a given section.
     ///
     /// # Arguments
@@ -197,9 +206,9 @@ impl<'a> Coff<'a> {
     /// * `section` - A reference to an `IMAGE_SECTION_HEADER`.
     ///
     /// # Returns
-    /// 
+    ///
     /// * A vector of relocation entries for the specified section.
-    pub fn get_relocations(&self, section: &IMAGE_SECTION_HEADER) -> Vec<IMAGE_RELOCATION> {        
+    pub fn get_relocations(&self, section: &IMAGE_SECTION_HEADER) -> Vec<IMAGE_RELOCATION> {
         let reloc_offset = section.PointerToRelocations as usize;
         let num_relocs = section.NumberOfRelocations as usize;
         let mut relocations = Vec::with_capacity(num_relocs);
@@ -225,7 +234,7 @@ impl<'a> Coff<'a> {
     /// * `symtbl` - A reference to an `IMAGE_SYMBOL` entry in the symbol table.
     ///
     /// # Returns
-    /// 
+    ///
     /// * The symbol's name.
     pub fn get_symbol_name(&self, symtbl: &IMAGE_SYMBOL) -> String {
         unsafe {
@@ -235,11 +244,13 @@ impl<'a> Coff<'a> {
                 let long_name_offset = symtbl.N.Name.Long as usize;
                 let string_table_offset = self.file_header.PointerToSymbolTable as usize
                     + self.file_header.NumberOfSymbols as usize * size_of::<IMAGE_SYMBOL>();
-            
+
                 // Retrieve the name from the string table
                 let offset = string_table_offset + long_name_offset;
                 let name_ptr = &self.buffer[offset] as *const u8;
-                CStr::from_ptr(name_ptr.cast()).to_string_lossy().into_owned()
+                CStr::from_ptr(name_ptr.cast())
+                    .to_string_lossy()
+                    .into_owned()
             };
 
             name.trim_end_matches('\0').to_string()
@@ -247,13 +258,13 @@ impl<'a> Coff<'a> {
     }
 
     /// Aligns an `page` value to the next multiple of 0x1000 (page alignment).
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `page` - The value to be aligned.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * The page-aligned value.
     pub fn page_align(page: usize) -> usize {
         const SIZE_OF_PAGE: usize = 0x1000;
@@ -274,7 +285,7 @@ impl<'a> Coff<'a> {
         let name = String::from_utf8_lossy(name_bytes);
         name.trim_end_matches('\0').to_string()
     }
-    
+
     /// Checks if the given type is classified as a function type.
     ///
     /// # Arguments
@@ -297,7 +308,7 @@ pub enum CoffMachine {
     X64,
 
     /// 32-bit architecture.
-    X32
+    X32,
 }
 
 /// Represents the COFF data source, which can be a file or a memory buffer.
@@ -500,7 +511,7 @@ pub struct IMAGE_SECTION_HEADER {
 
 /// A union representing either the physical or virtual size of the section.
 #[repr(C)]
-#[derive(Clone, Copy,)]
+#[derive(Clone, Copy)]
 pub union IMAGE_SECTION_HEADER_0 {
     /// The physical address of the section.
     pub PhysicalAddress: u32,
@@ -516,7 +527,7 @@ pub union IMAGE_SECTION_HEADER_0 {
 pub struct IMAGE_RELOCATION {
     #[br(temp)]
     va_raw: u32,
-    
+
     /// The index of the symbol in the symbol table.
     pub SymbolTableIndex: u32,
 
@@ -534,7 +545,7 @@ pub struct IMAGE_RELOCATION {
 pub union IMAGE_RELOCATION_0 {
     /// The virtual address of the relocation.
     pub VirtualAddress: u32,
-    
+
     /// The relocation count.
     pub RelocCount: u32,
 }

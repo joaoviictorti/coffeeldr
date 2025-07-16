@@ -7,8 +7,8 @@
 extern crate alloc;
 
 mod beacon;
-mod parse;
 mod error;
+mod parse;
 mod utils;
 
 /// Module exposing the `BeaconPack` structure for packing and manipulating binary data, strings, integers, and buffers.
@@ -18,6 +18,3 @@ pub use beacon_pack::*;
 /// Module containing the code that will load the COFF
 mod loader;
 pub use loader::*;
-
-/// Type alias for `Result` with `CoffeeLdrError` as the error type.
-pub(crate) type Result<T> = core::result::Result<T, crate::error::CoffeeLdrError>;
