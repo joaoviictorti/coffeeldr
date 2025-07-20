@@ -12,7 +12,11 @@ use core::intrinsics::{
 use core::{
     ffi::c_void,
     mem::transmute,
-    ptr::{null_mut, read_unaligned, write_unaligned},
+    ptr::{
+        null_mut, 
+        read_unaligned, 
+        write_unaligned
+    },
 };
 
 use obfstr::obfstr as s;
@@ -53,7 +57,8 @@ use super::parse::{
     IMAGE_SYMBOL
 };
 
-/// Type alias for the COFF main input function, which receives a pointer to data and the size of the data.
+/// Type alias for the COFF main input function, which receives a pointer to 
+/// data and the size of the data.
 type CoffMain = extern "C" fn(*mut u8, usize);
 
 /// Type for ntapi `LoadLibraryExA`
@@ -161,7 +166,8 @@ impl<'a> CoffeeLdr<'a> {
             CoffSource::File(path) => {
                 info!("Try to read the file: {path}");
                 // Try reading the file
-                let buffer = read_file(path).map_err(|_| CoffError::FileReadError(path.to_string()))?;
+                let buffer = read_file(path)
+                    .map_err(|_| CoffError::FileReadError(path.to_string()))?;
 
                 // Creates the COFF object from the buffer
                 Coff::from_buffer(Box::leak(buffer.into_boxed_slice()))?
@@ -282,7 +288,8 @@ impl<'a> CoffeeLdr<'a> {
                 let symbol = &self.coff.symbols[relocation.SymbolTableIndex as usize];
 
                 // Compute the address where the relocation should be applied.
-                let symbol_reloc_addr = (self.section_map[i].base as usize + unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
+                let symbol_reloc_addr = (self.section_map[i].base as usize 
+                    + unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
 
                 // Retrieve the symbol's name (used for function lookups).
                 let name = self.coff.get_symbol_name(symbol);
@@ -294,13 +301,25 @@ impl<'a> CoffeeLdr<'a> {
                             .write_volatile(function_address);
 
                         // Apply the relocation using the resolved function address.
-                        self.process_relocation(symbol_reloc_addr, function_address, self.function_map.address.add(index), relocation, symbol)?;
+                        self.process_relocation(
+                            symbol_reloc_addr, 
+                            function_address, 
+                            self.function_map.address.add(index), 
+                            relocation, 
+                            symbol
+                        )?;
                     };
 
                     index += 1;
                 } else {
                     // Apply the relocation but without a resolved function address (null pointer).
-                    self.process_relocation(symbol_reloc_addr, null_mut(), null_mut(), relocation, symbol)?;
+                    self.process_relocation(
+                        symbol_reloc_addr, 
+                        null_mut(), 
+                        null_mut(), 
+                        relocation, 
+                        symbol
+                    )?;
                 }
             }
         }
@@ -444,7 +463,8 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Returns
     ///
-    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing a vector of section mappings and `None` as no base address is reused.
+    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing a vector of section mappings and 
+    ///   `None` as no base address is reused.
     /// * `Err(CoffeeLdrError)` - If memory allocation fails, returns a corresponding loader error.
     fn alloc_bof_memory(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
         let mut size = self.coff.size();
@@ -479,8 +499,7 @@ impl<'a> CoffeeLdr<'a> {
     ///   used for function resolution.
     /// * `Err(CoffeeLdrError)` - If the module cannot be found or memory protection cannot be changed.
     fn alloc_with_stomping(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
-        let (mut text_address, mut size) = self
-            .get_text_module()
+        let (mut text_address, mut size) = self.get_text_module()
             .ok_or(CoffeeLdrError::StompingTextSectionNotFound)?;
 
         // If the file is larger than the space inside the .text of the target module,
