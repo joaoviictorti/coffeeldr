@@ -65,6 +65,7 @@ pub fn read_file(name: &str) -> Result<Vec<u8>> {
 ///
 /// In release builds, this macro discards the message after formatting to avoid
 /// embedding debug strings or causing unused variable warnings.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {{
@@ -80,6 +81,7 @@ macro_rules! debug {
 ///
 /// In release builds, this macro discards the message after formatting to avoid
 /// embedding debug strings or causing unused variable warnings.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {{
@@ -95,6 +97,7 @@ macro_rules! info {
 ///
 /// In release builds, this macro discards the message after formatting to avoid
 /// embedding debug strings or causing unused variable warnings.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {{
