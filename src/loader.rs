@@ -93,7 +93,7 @@ pub struct CoffeeLdr<'a> {
     /// of the specified module instead of allocating fresh memory.
     stomping: bool,
 
-    /// Name of the module to be stomped (e.g., `"amsi.dll"`).
+    /// Name of the module to be stomped
     module: &'a str,
 }
 
