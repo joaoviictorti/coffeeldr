@@ -22,7 +22,7 @@ use core::{
 use obfstr::obfstr as s;
 use dinvk::{
     parse::PE,
-    data::{NT_SUCCESS, NTSTATUS},
+    data::NT_SUCCESS,
     *,
 };
 
@@ -30,51 +30,38 @@ use windows_sys::Win32::{
     Foundation::{GetLastError, STATUS_SUCCESS},
     System::{
         Memory::*,
-        Diagnostics::Debug::*,
         SystemServices::*,
+        Diagnostics::Debug::*,
         LibraryLoader::DONT_RESOLVE_DLL_REFERENCES,
     },
 };
 
+use super::utils::read_file;
 use super::{debug, info, warn};
-use super::{
-    beacon::{
-        get_function_internal_address, 
-        get_output_data
-    },
-    error::{
-        CoffError, 
-        CoffeeLdrError, 
-        Result
-    },
-    utils::read_file,
+use super::error::{
+    CoffError, 
+    CoffeeLdrError, 
+    Result
+};
+use super::ffi::{
+    LoadLibraryExA, 
+    NtFreeVirtualMemory
 };
 use super::parse::{
-    Coff, 
-    CoffMachine, 
-    CoffSource, 
-    IMAGE_RELOCATION, 
+    Coff,
+    CoffMachine,
+    CoffSource,
+    IMAGE_RELOCATION,
     IMAGE_SYMBOL
+};
+use super::beacon::{
+    get_function_internal_address, 
+    get_output_data
 };
 
 /// Type alias for the COFF main input function, which receives a pointer to 
 /// data and the size of the data.
 type CoffMain = extern "C" fn(*mut u8, usize);
-
-/// Type for ntapi `LoadLibraryExA`
-type LoadLibraryExA = unsafe extern "system" fn(
-    lp_lib_file_name: *const u8, 
-    h_file: *mut c_void, 
-    dw_flags: u32
-) -> *mut c_void;
-
-/// Type for ntapi `NtFreeVirtualMemory`
-type NtFreeVirtualMemory = unsafe extern "system" fn(
-    process_handle: *mut c_void, 
-    base_address: *mut *mut c_void, 
-    region_size: *mut usize, 
-    free_type: u32
-) -> NTSTATUS;
 
 /// Main structure for loading and executing COFF (Common Object File Format) files.
 pub struct CoffeeLdr<'a> {

@@ -1,5 +1,10 @@
 use core::ptr::null_mut;
-use alloc::{ffi::CString, string::String, vec, vec::Vec};
+use alloc::{
+    ffi::CString, 
+    string::String, 
+    vec, 
+    vec::Vec
+};
 
 use obfstr::obfstring as s;
 use windows_sys::Win32::{
@@ -11,7 +16,7 @@ use windows_sys::Win32::{
     },
 };
 
-use crate::{error::CoffeeLdrError, error::Result};
+use super::error::{CoffeeLdrError, Result};
 
 /// Reads the entire contents of a file into memory using the Windows API.
 ///
@@ -24,7 +29,8 @@ use crate::{error::CoffeeLdrError, error::Result};
 /// * Returns `Ok(Vec<u8>)` containing the file's contents if the operation succeeds, or a
 ///   `CoffeeLdrError::GenericError` if any step fails.
 pub fn read_file(name: &str) -> Result<Vec<u8>> {
-    let file_name = CString::new(name).map_err(|_| CoffeeLdrError::GenericError(s!("Invalid cstring")))?;
+    let file_name = CString::new(name)
+        .map_err(|_| CoffeeLdrError::GenericError(s!("Invalid cstring")))?;
     let h_file = unsafe {
         CreateFileA(
             file_name.as_ptr().cast(),
@@ -108,3 +114,4 @@ macro_rules! warn {
         }
     }};
 }
+

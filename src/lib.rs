@@ -76,6 +76,7 @@ mod error;
 mod parse;
 mod utils;
 mod loader;
+mod ffi;
 mod beacon_pack;
 
 pub use loader::*;
