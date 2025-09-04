@@ -20,12 +20,7 @@ use core::{
 };
 
 use obfstr::obfstr as s;
-use dinvk::{
-    parse::PE,
-    data::NT_SUCCESS,
-    *,
-};
-
+use dinvk::{pe::PE, *};
 use windows_sys::Win32::{
     Foundation::{GetLastError, STATUS_SUCCESS},
     System::{
@@ -71,8 +66,8 @@ pub struct CoffeeLdr<'a> {
     /// Vector mapping the allocated memory sections.
     section_map: Vec<SectionMap>,
 
-    /// Map of functions `FunctionMap`.
-    function_map: FunctionMap,
+    /// Map of functions `Symbol`.
+    symbols: Symbol,
 
     /// Indicates whether module stomping is enabled.
     ///
@@ -94,7 +89,7 @@ impl Default for CoffeeLdr<'_> {
         Self { 
             coff: Coff::default(), 
             section_map: Vec::new(), 
-            function_map: FunctionMap::default(), 
+            symbols: Symbol::default(), 
             stomping: false, 
             module: "" 
         }
@@ -168,7 +163,7 @@ impl<'a> CoffeeLdr<'a> {
         Ok(Self {
             coff,
             section_map: Vec::new(),
-            function_map: FunctionMap::default(),
+            symbols: Symbol::default(),
             ..Default::default()
         })
     }
@@ -256,14 +251,14 @@ impl<'a> CoffeeLdr<'a> {
 
         // Resolve external symbols (such as function addresses) and build a function lookup map.
         // When using module stomping, base resolution on the stomped module's memory address.
-        let (functions, function_map) = if self.stomping {
+        let (functions, symbols) = if self.stomping {
             let addr = sec_base.ok_or(CoffeeLdrError::MissingStompingBaseAddress)?;
-            FunctionMap::with_address(&self.coff, addr)?
+            Symbol::with_address(&self.coff, addr)?
         } else {
-            FunctionMap::new(&self.coff)?
+            Symbol::new(&self.coff)?
         };
 
-        self.function_map = function_map;
+        self.symbols = symbols;
 
         // Process relocations to correctly adjust symbol addresses based on memory layout.
         let mut index = 0;
@@ -282,7 +277,7 @@ impl<'a> CoffeeLdr<'a> {
                 let name = self.coff.get_symbol_name(symbol);
                 if let Some(function_address) = functions.get(&name).map(|&addr| addr as *mut c_void) {
                     unsafe {
-                        self.function_map
+                        self.symbols
                             .address
                             .add(index)
                             .write_volatile(function_address);
@@ -291,7 +286,7 @@ impl<'a> CoffeeLdr<'a> {
                         self.process_relocation(
                             symbol_reloc_addr, 
                             function_address, 
-                            self.function_map.address.add(index), 
+                            self.symbols.address.add(index), 
                             relocation, 
                             symbol
                         )?;
@@ -323,7 +318,7 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// * `reloc_addr` - A pointer to the location in memory where the relocation will be applied.
     /// * `function_address` - The address of the function or symbol being relocated, or `null` if not applicable.
-    /// * `function_map` - A pointer to the function map, used when resolving external symbols.
+    /// * `symbols` - A pointer to the function map, used when resolving external symbols.
     /// * `relocation` - A reference to the `IMAGE_RELOCATION` struct, which contains the relocation entry details.
     /// * `symbol` - A reference to the `IMAGE_SYMBOL` struct, representing the symbol being relocated.
     ///
@@ -336,7 +331,7 @@ impl<'a> CoffeeLdr<'a> {
         &self, 
         reloc_addr: *mut c_void, 
         function_address: *mut c_void, 
-        function_map: *mut *mut c_void, 
+        symbols: *mut *mut c_void, 
         relocation: &IMAGE_RELOCATION, 
         symbol: &IMAGE_SYMBOL
     ) -> Result<()> {
@@ -350,7 +345,7 @@ impl<'a> CoffeeLdr<'a> {
                 match self.coff.arch {
                     CoffMachine::X64 =>  {
                         if relocation.Type as u32 == IMAGE_REL_AMD64_REL32 && !function_address.is_null() {
-                            let relative_address = (function_map as usize)
+                            let relative_address = (symbols as usize)
                                 .wrapping_sub(reloc_addr as usize)
                                 .wrapping_sub(size_of::<u32>());
 
@@ -360,7 +355,7 @@ impl<'a> CoffeeLdr<'a> {
                     },
                     CoffMachine::X32 => {
                         if relocation.Type as u32 == IMAGE_REL_I386_DIR32 && !function_address.is_null() {
-                            write_unaligned(reloc_addr as *mut u32, function_map as u32);
+                            write_unaligned(reloc_addr as *mut u32, symbols as u32);
                             return Ok(())
                         }
                     }
@@ -506,7 +501,7 @@ impl<'a> CoffeeLdr<'a> {
             return Err(CoffeeLdrError::MemoryProtectionError(unsafe { GetLastError() }));
         }
 
-        // This is necessary because REL32 instructions must remain within range, and allocating the `FunctionMap`
+        // This is necessary because REL32 instructions must remain within range, and allocating the `Symbol`
         // elsewhere (e.g. with a distant `NtAllocateVirtualMemory`) could lead to crashes.
         //
         // Returning `Some(sec_base)` signals that the loader must re-use that exact memory area.
@@ -526,15 +521,11 @@ impl<'a> CoffeeLdr<'a> {
     /// * `None` - If the module or the section cannot be located.
     fn get_text_module(&self) -> Option<(*mut c_void, usize)> {
         // Invoking LoadLibraryExA dynamically
-        let kernel32 = GetModuleHandle(2808682670u32, Some(dinvk::hash::murmur3));
         let target = format!("{}\0", self.module);
         let module = {
             let handle = GetModuleHandle(self.module, None);
             if handle.is_null() {
-                dinvoke!(
-                    kernel32,
-                    s!("LoadLibraryExA"),
-                    LoadLibraryExA,
+                LoadLibraryExA(
                     target.as_ptr(),
                     null_mut(),
                     DONT_RESOLVE_DLL_REFERENCES
@@ -595,19 +586,13 @@ impl Drop for CoffeeLdr<'_> {
         if self.stomping {
             return;
         }
-
-        // Retrive Ntdll
-        let ntdll = dinvk::get_ntdll_address();
-
+        
         // Iterate over each section in the section map
         let mut size = 0;
         for section in self.section_map.iter_mut() {
             // Release memory if the base pointer is not null
             if !section.base.is_null() {
-                dinvoke!(
-                    ntdll,
-                    s!("NtFreeVirtualMemory"),
-                    NtFreeVirtualMemory,
+                NtFreeVirtualMemory(
                     NtCurrentProcess(),
                     &mut section.base,
                     &mut size,
@@ -617,13 +602,10 @@ impl Drop for CoffeeLdr<'_> {
         }
 
         // Release memory for the function map if the address pointer is not null
-        if !self.function_map.address.is_null() {
-            dinvoke!(
-                ntdll,
-                s!("NtFreeVirtualMemory"),
-                NtFreeVirtualMemory,
+        if !self.symbols.address.is_null() {
+            NtFreeVirtualMemory(
                 NtCurrentProcess(),
-                &mut *self.function_map.address,
+                unsafe { &mut *self.symbols.address },
                 &mut size,
                 MEM_RELEASE
             );
@@ -636,13 +618,13 @@ const MAX_SYMBOLS: usize = 600;
 
 /// Represents a mapping of external symbols (functions) to their memory addresses.
 #[derive(Debug, Clone, Copy)]
-struct FunctionMap {
+struct Symbol {
     /// A pointer to an array of pointers, each pointing to an external function.
     address: *mut *mut c_void,
 }
 
-impl FunctionMap {
-    /// Creates a new `FunctionMap` and resolves external symbols for the given COFF file.
+impl Symbol {
+    /// Creates a new `Symbol` and resolves external symbols for the given COFF file.
     ///
     /// # Arguments
     ///
@@ -650,10 +632,10 @@ impl FunctionMap {
     ///
     /// # Returns
     ///
-    /// * `Ok((BTreeMap<String, usize>, FunctionMap))` - A tuple containing the resolved symbols and
+    /// * `Ok((BTreeMap<String, usize>, Symbol))` - A tuple containing the resolved symbols and
     ///   function map, with each symbol's name mapped to its resolved address.
     /// * `Err(CoffeeLdrError)` - If memory allocation fails or symbol resolution exceeds the limit.
-    fn new(coff: &Coff) -> Result<(BTreeMap<String, usize>, FunctionMap)> {
+    fn new(coff: &Coff) -> Result<(BTreeMap<String, usize>, Symbol)> {
         let symbols = Self::process_symbols(coff)?;
         let mut size = MAX_SYMBOLS * size_of::<*mut c_void>();
         let mut addr = null_mut::<c_void>();
@@ -671,10 +653,10 @@ impl FunctionMap {
         }
 
         let address = addr as *mut *mut c_void;
-        Ok((symbols, FunctionMap { address }))
+        Ok((symbols, Self { address }))
     }
 
-    /// Creates a `FunctionMap` using a specified base address for symbol resolution.
+    /// Creates a `Symbol` using a specified base address for symbol resolution.
     ///
     /// # Arguments
     ///
@@ -683,14 +665,14 @@ impl FunctionMap {
     ///
     /// # Returns
     ///
-    /// * `Ok((BTreeMap<String, usize>, FunctionMap))` - A tuple containing the resolved symbol map
-    ///   and the constructed `FunctionMap` with the associated base address.
+    /// * `Ok((BTreeMap<String, usize>, Symbol))` - A tuple containing the resolved symbol map
+    ///   and the constructed `Symbol` with the associated base address.
     /// * `Err(CoffeeLdrError)` - If symbol processing fails.
-    pub fn with_address(coff: &Coff, addr: *mut c_void) -> Result<(BTreeMap<String, usize>, FunctionMap)> {
+    pub fn with_address(coff: &Coff, addr: *mut c_void) -> Result<(BTreeMap<String, usize>, Symbol)> {
         let symbols = Self::process_symbols(coff)?;
         Ok((
             symbols,
-            FunctionMap {
+            Self {
                 address: addr as *mut *mut c_void,
             },
         ))
@@ -783,12 +765,12 @@ impl FunctionMap {
     }
 }
 
-impl Default for FunctionMap {
-    /// Provides a default-initialized `FunctionMap`.
+impl Default for Symbol {
+    /// Provides a default-initialized `Symbol`.
     ///
     /// # Returns
     ///
-    /// * A default-initialized `FunctionMap`.
+    /// * A default-initialized `Symbol`.
     fn default() -> Self {
         Self { address: null_mut() }
     }
