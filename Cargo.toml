@@ -21,7 +21,7 @@ include = [
 [dependencies]
 log = "0.4.22"
 obfstr = "0.4.4"
-dinvk = "0.2.6"
+dinvk = "0.2.7"
 binrw = { version = "0.15.0", default-features = false }
 spin = { version = "0.10.0", default-features = false }
 thiserror = { version = "2.0.12", default-features = false }
