@@ -20,9 +20,13 @@ use windows_sys::Win32::{
     Security::*,
     Foundation::{CloseHandle, HANDLE, STATUS_SUCCESS},
     System::{
-        Memory::{MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READWRITE},
         Threading::*,
         WindowsProgramming::CLIENT_ID,
+        Memory::{
+            MEM_COMMIT, 
+            MEM_RESERVE, 
+            PAGE_EXECUTE_READWRITE
+        },
     },
 };
 
@@ -30,10 +34,13 @@ use super::error::{CoffeeLdrError, Result};
 
 #[allow(dead_code)]
 const CALLBACK_OUTPUT: u32 = 0x0;
+
 #[allow(dead_code)]
 const CALLBACK_OUTPUT_OEM: u32 = 0x1e;
+
 #[allow(dead_code)]
 const CALLBACK_ERROR: u32 = 0x0d;
+
 #[allow(dead_code)]
 const CALLBACK_OUTPUT_UTF8: u32 = 0x20;
 
