@@ -146,4 +146,4 @@ I want to express my gratitude to these projects that inspired me to create `cof
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](/LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/joaoviictorti/coffeeldr/tree/main/LICENSE) file for details.
