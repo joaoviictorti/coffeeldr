@@ -58,6 +58,7 @@ use super::beacon::{
 type CoffMain = extern "C" fn(*mut u8, usize);
 
 /// Represents a Rust interface to the COFF (Common Object File Format) files.
+#[derive(Default)]
 pub struct CoffeeLdr<'a> {
     /// COFF structure representing the loaded file or buffer.
     coff: Coff<'a>,
@@ -76,18 +77,6 @@ pub struct CoffeeLdr<'a> {
 
     /// Name of the module to be stomped
     module: &'a str,
-}
-
-impl Default for CoffeeLdr<'_> {
-    fn default() -> Self {
-        Self { 
-            coff: Coff::default(), 
-            section_map: Vec::new(), 
-            symbols: Symbol::default(), 
-            stomping: false, 
-            module: "" 
-        }
-    }
 }
 
 impl<'a> CoffeeLdr<'a> {
