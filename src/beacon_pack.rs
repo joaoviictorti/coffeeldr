@@ -5,6 +5,7 @@ use hex::FromHex;
 type Result<T> = core::result::Result<T, super::error::BeaconPackError>;
 
 /// A struct that represents a buffer for packing data with size tracking.
+#[derive(Default)]
 pub struct BeaconPack {
     /// The internal buffer where data is stored.
     buffer: Vec<u8>,
@@ -118,8 +119,3 @@ impl BeaconPack {
     }
 }
 
-impl Default for BeaconPack {
-    fn default() -> Self {
-        Self { buffer: Vec::new(), size: 0 }
-    }
-}
