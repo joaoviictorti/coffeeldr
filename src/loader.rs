@@ -217,7 +217,7 @@ impl<'a> CoffeeLdr<'a> {
             .unwrap_or_default())
     }
 
-    /// Prepares the environment for the execution of the COFF file, allocating memory and resolving relocations.
+    /// Prepares the environment for the execution of the COFF file.
     fn prepare(&mut self) -> Result<()> {
         // Verify that the COFF file's architecture.
         self.check_architecture()?;
