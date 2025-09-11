@@ -56,21 +56,12 @@ pub struct BeaconOutputBuffer {
 }
 
 impl BeaconOutputBuffer {
-    /// Creates a new, empty `BeaconOutputBuffer`.
-    ///
-    /// # Returns
-    ///
-    /// * A new instance of `BeaconOutputBuffer` with an empty internal buffer.
+    /// Creates a new, empty [`BeaconOutputBuffer`].
     const fn new() -> Self {
         Self { buffer: Vec::new() }
     }
 
     /// Appends a raw C-style string to the buffer.
-    ///
-    /// # Arguments
-    ///
-    /// * `s` - A pointer to a C-style string (`c_char`).
-    /// * `len` - The length of the string to append.
     fn append_char(&mut self, s: *mut c_char, len: c_int) {
         if s.is_null() || len <= 0 {
             return;
@@ -80,21 +71,11 @@ impl BeaconOutputBuffer {
     }
 
     /// Appends a Rust `&str` to the buffer.
-    ///
-    /// # Arguments
-    ///
-    /// * `s` - A reference to a Rust string slice (`&str`).
     fn append_string(&mut self, s: &str) {
         self.buffer.extend(s.bytes().map(|b| b as c_char));
     }
 
     /// Retrieves the current buffer and its size, then clears it.
-    ///
-    /// # Returns
-    ///
-    /// A tuple containing:
-    /// * A pointer to the buffer (`*mut c_char`).
-    /// * The size of the buffer (`usize`).
     fn get_output(&mut self) -> (*mut c_char, usize) {
         let size = self.buffer.len();
         let ptr = self.buffer.as_mut_ptr();
@@ -110,10 +91,6 @@ impl BeaconOutputBuffer {
 
 impl fmt::Display for BeaconOutputBuffer {
     /// Converts the internal buffer into a Rust `String`.
-    ///
-    /// # Returns
-    ///
-    /// * A `String` containing the formatted output from the buffer.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let string = self
             .buffer
@@ -164,8 +141,8 @@ struct Format {
 ///
 /// # Returns
 ///
-/// * `Ok(usize)`: The function's address if found.
-/// * `Err(CoffeeLdrError)`: If the function is not found.
+/// * `Ok(usize)` - The function's address if found.
+/// * `Err(CoffeeLdrError)` - If the function is not found.
 pub fn get_function_internal_address(name: &str) -> Result<usize> {
     match jenkins3(name) {
         // Output
@@ -213,8 +190,8 @@ pub fn get_function_internal_address(name: &str) -> Result<usize> {
 ///
 /// # Returns
 ///
-/// * `Some(BeaconOutputBuffer)`: A cloned copy of the current output buffer if successful.
-/// * `None`: If locking the buffer fails.
+/// * `Some(BeaconOutputBuffer)` - A cloned copy of the current output buffer if successful.
+/// * `None` - If locking the buffer fails.
 pub fn get_output_data() -> Option<BeaconOutputBuffer> {
     let mut beacon = BEACON_BUFFER.lock();
     if beacon.buffer.is_empty() {

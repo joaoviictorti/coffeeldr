@@ -22,7 +22,6 @@ const COFF_MACHINE_X32: u16 = 0x14c;
 const MAX_SECTIONS: u16 = 96;
 
 /// Represents a COFF (Common Object File Format) file.
-/// This structure stores the file headers, symbols, sections and the file's byte buffer.
 pub struct Coff<'a> {
     //// The COFF file header (`IMAGE_FILE_HEADER`).
     pub file_header: IMAGE_FILE_HEADER,
@@ -41,11 +40,6 @@ pub struct Coff<'a> {
 }
 
 impl<'a> Default for Coff<'a> {
-    /// Provides a default-initialized `Coff`.
-    ///
-    /// # Returns
-    ///
-    /// * A default-initialized `Coff`.
     fn default() -> Self {
         Self {
             file_header: IMAGE_FILE_HEADER::default(),
@@ -58,7 +52,7 @@ impl<'a> Default for Coff<'a> {
 }
 
 impl<'a> Coff<'a> {
-    /// Creates a new instance of the `Coff` structure from a given file.
+    /// Creates a new instance of the [`Coff`] structure from a given file.
     ///
     /// # Arguments
     ///
@@ -66,7 +60,7 @@ impl<'a> Coff<'a> {
     ///
     /// # Returns
     ///
-    /// * `Ok(Self)` - Returns a `Coff` instance if parsing succeeds.
+    /// * `Ok(Self)` - Returns a [`Coff`] instance if parsing succeeds.
     /// * `Err(CoffError)` - If parsing fails due to an invalid buffer or file structure.
     pub fn from_buffer(buffer: &'a [u8]) -> Result<Self, CoffError> {
         // Parse the file
@@ -83,7 +77,7 @@ impl<'a> Coff<'a> {
     /// # Returns
     ///
     /// * `Ok(Self)` - If the buffer is successfully parsed into a `Coff` structure.
-    /// * `Err(CoffError)` - If parsing fails due to invalid file structure or errors in the buffer.
+    /// * `Err(CoffError)` - If parsing fails.
     fn parse(buffer: &'a [u8]) -> Result<Self, CoffError> {
         debug!("Parsing COFF file header, buffer size: {}", buffer.len());
 
@@ -293,9 +287,8 @@ impl<'a> Coff<'a> {
     /// * `x` - A 16-bit unsigned integer representing the type to be checked.
     ///
     /// # Returns
-    ///
-    /// * `true` - If the type represents a function.
-    /// * `false` - If the type does not represent a function.
+    /// 
+    /// * If the type represents a function.
     pub fn is_fcn(x: u16) -> bool {
         (x & 0x30) == (2 << 4)
     }

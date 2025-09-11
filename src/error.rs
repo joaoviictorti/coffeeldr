@@ -1,7 +1,6 @@
 use alloc::string::String;
 use thiserror::Error;
 
-/// Type alias for `Result` with `CoffeeLdrError` as the error type.
 pub(crate) type Result<T> = core::result::Result<T, crate::error::CoffeeLdrError>;
 
 /// Represents errors that can occur during the loading and 

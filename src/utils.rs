@@ -26,8 +26,7 @@ use super::error::{CoffeeLdrError, Result};
 ///
 /// # Returns
 ///
-/// * Returns `Ok(Vec<u8>)` containing the file's contents if the operation succeeds, or a
-///   `CoffeeLdrError::GenericError` if any step fails.
+/// * Containing the file's contents if the operation succeeds.
 pub fn read_file(name: &str) -> Result<Vec<u8>> {
     let file_name = CString::new(name)
         .map_err(|_| CoffeeLdrError::GenericError(s!("Invalid cstring")))?;
@@ -68,9 +67,6 @@ pub fn read_file(name: &str) -> Result<Vec<u8>> {
 }
 
 /// Logs a `debug` message in debug builds only.
-///
-/// In release builds, this macro discards the message after formatting to avoid
-/// embedding debug strings or causing unused variable warnings.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! debug {
@@ -84,9 +80,6 @@ macro_rules! debug {
 }
 
 /// Logs an `info` message in debug builds only.
-///
-/// In release builds, this macro discards the message after formatting to avoid
-/// embedding debug strings or causing unused variable warnings.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! info {
@@ -100,9 +93,6 @@ macro_rules! info {
 }
 
 /// Logs a `warn` message in debug builds only.
-///
-/// In release builds, this macro discards the message after formatting to avoid
-/// embedding debug strings or causing unused variable warnings.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! warn {

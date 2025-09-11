@@ -97,16 +97,15 @@ impl Default for CoffeeLdr<'_> {
 }
 
 impl<'a> CoffeeLdr<'a> {
-    /// Creates a new `CoffeeLdr` instance from a given COFF source.
+    /// Creates a new [`CoffeeLdr`] instance with the specified assembly buffer.
     ///
     /// # Arguments
     ///
-    /// * `source` - A generic input that can be either a file or a memory buffer containing the COFF data.
-    ///   This is converted into a `CoffSource`.
+    /// * `source` - A value convertible into [`CoffSource`], representing either a file path or a byte buffer.
     ///
     /// # Returns
     ///
-    /// * `Ok(Self)` - If the COFF source is successfully processed, returning a new `CoffeeLdr` instance.
+    /// * `Ok(Self)` -  If the buffer is valid and the [`CoffSource`] instance is created successfully.
     /// * `Err(CoffeeLdrError)` - If an error occurs during processing.
     ///
     /// # Examples
@@ -141,7 +140,6 @@ impl<'a> CoffeeLdr<'a> {
     ///     Err(e) => eprintln!("Error loading COFF: {:?}", e),
     /// }
     /// ```
-    #[rustfmt::skip]
     pub fn new<T: Into<CoffSource<'a>>>(source: T) -> Result<Self> {
         // Processes COFF based on the source (file or buffer)
         let coff = match source.into() {
@@ -180,11 +178,8 @@ impl<'a> CoffeeLdr<'a> {
     /// # Arguments
     ///
     /// * `entry` - A string slice representing the entry point of the COFF file.
-    ///   This is the symbol name where execution begins.
-    /// * `args` - Optional pointer to an argument list (`*mut u8`) passed to the entry point.
-    ///   If `None`, no arguments are passed.
+    /// * `args` - Optional pointer to an argument list passed to the entry point.
     /// * `argc` - An optional `usize` representing the count of arguments passed through `args`.
-    ///   If `None`, the argument count is considered zero.
     ///
     /// # Returns
     ///
@@ -229,11 +224,6 @@ impl<'a> CoffeeLdr<'a> {
     }
 
     /// Prepares the environment for the execution of the COFF file, allocating memory and resolving relocations.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - If the environment is prepared successfully.
-    /// * `Err(CoffeeLdrError)` - If any error occurs during preparation, returns a specific `CoffeeLdrError`.
     fn prepare(&mut self) -> Result<()> {
         // Verify that the COFF file's architecture.
         self.check_architecture()?;
@@ -426,11 +416,6 @@ impl<'a> CoffeeLdr<'a> {
     }
 
     /// Set the memory permissions for each section loaded.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - If all section permissions were adjusted successfully.
-    /// * `Err(CoffeeLdrError)` - If an error occurs while adjusting permissions for any section.
     fn adjust_permissions(&mut self) -> Result<()> {
         self.section_map
             .iter_mut()
@@ -549,11 +534,6 @@ impl<'a> CoffeeLdr<'a> {
     }
 
     /// Checks if the COFF file's architecture matches the architecture of the system.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - If the COFF architecture matches the system's architecture.
-    /// * `Err(CoffeeLdrError)` - If there is a mismatch between the COFF and system architectures.
     #[inline]
     fn check_architecture(&self) -> Result<()> {
         match self.coff.arch {
@@ -579,7 +559,6 @@ impl<'a> CoffeeLdr<'a> {
     }
 }
 
-/// Implements the `Drop` trait to release memory when `CoffeeLdr` goes out of scope.
 impl Drop for CoffeeLdr<'_> {
     fn drop(&mut self) {
         // It doesn't free anything, because we've blocked memory from another module.
@@ -624,7 +603,7 @@ struct Symbol {
 }
 
 impl Symbol {
-    /// Creates a new `Symbol` and resolves external symbols for the given COFF file.
+    /// Creates a new [`Symbol`] and resolves external symbols for the given COFF file.
     ///
     /// # Arguments
     ///
@@ -632,8 +611,7 @@ impl Symbol {
     ///
     /// # Returns
     ///
-    /// * `Ok((BTreeMap<String, usize>, Symbol))` - A tuple containing the resolved symbols and
-    ///   function map, with each symbol's name mapped to its resolved address.
+    /// * `Ok((BTreeMap<String, usize>, Symbol))` - A tuple containing the resolved symbols.
     /// * `Err(CoffeeLdrError)` - If memory allocation fails or symbol resolution exceeds the limit.
     fn new(coff: &Coff) -> Result<(BTreeMap<String, usize>, Symbol)> {
         let symbols = Self::process_symbols(coff)?;
@@ -656,7 +634,7 @@ impl Symbol {
         Ok((symbols, Self { address }))
     }
 
-    /// Creates a `Symbol` using a specified base address for symbol resolution.
+    /// Creates a [`Symbol`] using a specified base address for symbol resolution.
     ///
     /// # Arguments
     ///
@@ -665,8 +643,7 @@ impl Symbol {
     ///
     /// # Returns
     ///
-    /// * `Ok((BTreeMap<String, usize>, Symbol))` - A tuple containing the resolved symbol map
-    ///   and the constructed `Symbol` with the associated base address.
+    /// * `Ok((BTreeMap<String, usize>, Symbol))` - A tuple containing the resolved symbol.
     /// * `Err(CoffeeLdrError)` - If symbol processing fails.
     pub fn with_address(coff: &Coff, addr: *mut c_void) -> Result<(BTreeMap<String, usize>, Symbol)> {
         let symbols = Self::process_symbols(coff)?;
@@ -766,11 +743,6 @@ impl Symbol {
 }
 
 impl Default for Symbol {
-    /// Provides a default-initialized `Symbol`.
-    ///
-    /// # Returns
-    ///
-    /// * A default-initialized `Symbol`.
     fn default() -> Self {
         Self { address: null_mut() }
     }
@@ -838,11 +810,6 @@ impl SectionMap {
     }
 
     /// Set the memory permissions for each section loaded.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - If the permissions were adjusted successfully.
-    /// * `Err(CoffeeLdrError)` - If an error occurs while adjusting permissions.
     fn adjust_permissions(&mut self) -> Result<()> {
         info!(
             "Adjusting memory permissions for section: Name = {}, Address = {:?}, Size = {}, Characteristics = 0x{:X}",
