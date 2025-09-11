@@ -139,15 +139,6 @@ impl<'a> Coff<'a> {
     }
 
     /// Validates the machine architecture of the COFF file.
-    ///
-    /// # Arguments
-    ///
-    /// * `file_header` - The COFF file header.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(CoffMachine)` - The COFF architecture (`X64` or `X32`).
-    /// * `Err(CoffError)` - If the architecture is not supported.
     #[inline]
     fn validate_architecture(file_header: IMAGE_FILE_HEADER) -> Result<CoffMachine, CoffError> {
         match file_header.Machine {
@@ -161,10 +152,6 @@ impl<'a> Coff<'a> {
     }
 
     /// Calculates the total size of the image, including alignment and symbol relocation.
-    ///
-    /// # Returns
-    ///
-    /// * The total aligned size of the COFF image.
     pub fn size(&self) -> usize {
         let length = self
             .sections
@@ -194,14 +181,6 @@ impl<'a> Coff<'a> {
     }
 
     /// Returns the relocation entries for a given section.
-    ///
-    /// # Arguments
-    ///
-    /// * `section` - A reference to an `IMAGE_SECTION_HEADER`.
-    ///
-    /// # Returns
-    ///
-    /// * A vector of relocation entries for the specified section.
     pub fn get_relocations(&self, section: &IMAGE_SECTION_HEADER) -> Vec<IMAGE_RELOCATION> {
         let reloc_offset = section.PointerToRelocations as usize;
         let num_relocs = section.NumberOfRelocations as usize;
@@ -222,14 +201,6 @@ impl<'a> Coff<'a> {
     }
 
     /// Retrieves the name of a symbol from the symbol table.
-    ///
-    /// # Arguments
-    ///
-    /// * `symtbl` - A reference to an `IMAGE_SYMBOL` entry in the symbol table.
-    ///
-    /// # Returns
-    ///
-    /// * The symbol's name.
     pub fn get_symbol_name(&self, symtbl: &IMAGE_SYMBOL) -> String {
         unsafe {
             let name = if symtbl.N.ShortName[0] != 0 {
@@ -252,28 +223,12 @@ impl<'a> Coff<'a> {
     }
 
     /// Aligns an `page` value to the next multiple of 0x1000 (page alignment).
-    ///
-    /// # Arguments
-    ///
-    /// * `page` - The value to be aligned.
-    ///
-    /// # Returns
-    ///
-    /// * The page-aligned value.
     pub fn page_align(page: usize) -> usize {
         const SIZE_OF_PAGE: usize = 0x1000;
         (page + SIZE_OF_PAGE - 1) & !(SIZE_OF_PAGE - 1)
     }
 
     /// Retrieves the section name from an `IMAGE_SECTION_HEADER` struct.
-    ///
-    /// # Arguments
-    ///
-    /// * `section` - A reference to an `IMAGE_SECTION_HEADER` from which the name will be extracted.
-    ///
-    /// # Returns
-    ///
-    /// * The section name.
     pub fn get_section_name(section: &IMAGE_SECTION_HEADER) -> String {
         let name_bytes = &section.Name;
         let name = String::from_utf8_lossy(name_bytes);
@@ -281,20 +236,12 @@ impl<'a> Coff<'a> {
     }
 
     /// Checks if the given type is classified as a function type.
-    ///
-    /// # Arguments
-    ///
-    /// * `x` - A 16-bit unsigned integer representing the type to be checked.
-    ///
-    /// # Returns
-    /// 
-    /// * If the type represents a function.
     pub fn is_fcn(x: u16) -> bool {
         (x & 0x30) == (2 << 4)
     }
 }
 
-/// Represents the architecture of the COFF (Common Object File Format) file.
+/// Represents the architecture of the COFF file.
 #[derive(Debug, PartialEq, Hash, Clone, Copy, Eq, PartialOrd, Ord)]
 pub enum CoffMachine {
     /// 64-bit architecture.
@@ -304,7 +251,7 @@ pub enum CoffMachine {
     X32,
 }
 
-/// Represents the COFF data source, which can be a file or a memory buffer.
+/// Represents the COFF data source.
 pub enum CoffSource<'a> {
     /// COFF file indicated by a string representing the file path.
     File(&'a str),
@@ -315,14 +262,6 @@ pub enum CoffSource<'a> {
 
 impl<'a> From<&'a str> for CoffSource<'a> {
     /// Converts a file path (`&'a str`) to a COFF source (`CoffSource::File`).
-    ///
-    /// # Arguments
-    ///
-    /// * `file` - Path of the COFF file.
-    ///
-    /// # Returns
-    ///
-    /// * The input string will be treated as the path of a COFF file.
     fn from(file: &'a str) -> Self {
         CoffSource::File(file)
     }
@@ -330,14 +269,6 @@ impl<'a> From<&'a str> for CoffSource<'a> {
 
 impl<'a, const N: usize> From<&'a [u8; N]> for CoffSource<'a> {
     /// Converts a fixed-size byte array (`&[u8; N]`) to a COFF source (`CoffSource::Buffer`).
-    ///
-    /// # Arguments
-    ///
-    /// * `buffer` - A fixed-size byte array representing the COFF file data.
-    ///
-    /// # Returns
-    ///
-    /// * The input byte array will be treated as a COFF buffer in memory.
     fn from(buffer: &'a [u8; N]) -> Self {
         CoffSource::Buffer(buffer)
     }
@@ -345,14 +276,6 @@ impl<'a, const N: usize> From<&'a [u8; N]> for CoffSource<'a> {
 
 impl<'a> From<&'a [u8]> for CoffSource<'a> {
     /// Converts a byte slice (`&[u8]`) to a COFF source (`CoffSource::Buffer`).
-    ///
-    /// # Arguments
-    ///
-    /// * `buffer` - A byte slice representing the COFF file data.
-    ///
-    /// # Returns
-    ///
-    /// * The input byte slice will be treated as a COFF buffer in memory.
     fn from(buffer: &'a [u8]) -> Self {
         CoffSource::Buffer(buffer)
     }
@@ -360,7 +283,7 @@ impl<'a> From<&'a [u8]> for CoffSource<'a> {
 
 /// Represents the file header of a COFF (Common Object File Format) file.
 #[binread]
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 #[br(little)]
 #[repr(C)]
 pub struct IMAGE_FILE_HEADER {
@@ -384,25 +307,6 @@ pub struct IMAGE_FILE_HEADER {
 
     /// The characteristics of the file.
     pub Characteristics: u16,
-}
-
-impl Default for IMAGE_FILE_HEADER {
-    /// Provides a default-initialized `IMAGE_FILE_HEADER`.
-    ///
-    /// # Returns
-    ///
-    /// * A default-initialized `IMAGE_FILE_HEADER`.
-    fn default() -> Self {
-        Self {
-            Machine: 0,
-            NumberOfSections: 0,
-            TimeDateStamp: 0,
-            PointerToSymbolTable: 0,
-            NumberOfSymbols: 0,
-            SizeOfOptionalHeader: 0,
-            Characteristics: 0,
-        }
-    }
 }
 
 /// Represents a symbol in the COFF symbol table.
