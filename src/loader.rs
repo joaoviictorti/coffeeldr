@@ -54,11 +54,10 @@ use super::beacon::{
     get_output_data
 };
 
-/// Type alias for the COFF main input function, which receives a pointer to 
-/// data and the size of the data.
+/// Type alias for the COFF main input function.
 type CoffMain = extern "C" fn(*mut u8, usize);
 
-/// Main structure for loading and executing COFF (Common Object File Format) files.
+/// Represents a Rust interface to the COFF (Common Object File Format) files.
 pub struct CoffeeLdr<'a> {
     /// COFF structure representing the loaded file or buffer.
     coff: Coff<'a>,
@@ -80,11 +79,6 @@ pub struct CoffeeLdr<'a> {
 }
 
 impl Default for CoffeeLdr<'_> {
-    /// Provides a default-initialized `CoffeeLdr`.
-    ///
-    /// # Returns
-    ///
-    /// * A default-initialized `CoffeeLdr`.
     fn default() -> Self {
         Self { 
             coff: Coff::default(), 
