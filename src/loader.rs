@@ -292,7 +292,6 @@ impl<'a> CoffeeLdr<'a> {
 
         // Adjust memory permissions for allocated sections (e.g., marking executable sections).
         self.adjust_permissions()?;
-
         Ok(())
     }
 
@@ -456,8 +455,7 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Returns
     ///
-    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing the section mappings and the base address 
-    ///   used for function resolution.
+    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing the section mappings and the base address.
     /// * `Err(CoffeeLdrError)` - If the module cannot be found or memory protection cannot be changed.
     fn alloc_with_stomping(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
         let (mut text_address, mut size) = self.get_text_module()
