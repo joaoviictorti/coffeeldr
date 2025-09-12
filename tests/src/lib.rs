@@ -14,7 +14,7 @@ fn test_bof_whoami() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_bof_whoami_with_stomping() -> Result<(), Box<dyn Error>> {
-    let mut coffee = CoffeeLdr::new("examples/whoami.x64.o")?.module_stomping("amsi.dll");
+    let mut coffee = CoffeeLdr::new("examples/whoami.x64.o")?.with_module_stomping("amsi.dll");
     let output = coffee.run("go", None, None)?;
     println!("{output}");
     Ok(())
