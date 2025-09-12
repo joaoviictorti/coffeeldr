@@ -144,7 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut coffee = CoffeeLdr::new(args.bof.as_str())?;
     coffee = if let Some(ref module_name) = args.stomping {
         info!("Module stomping enabled: {}", module_name);
-        coffee.module_stomping(module_name)
+        coffee.with_module_stomping(module_name)
     } else {
         coffee
     };
