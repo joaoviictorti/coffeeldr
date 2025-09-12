@@ -392,7 +392,7 @@ impl<'a> CoffMemory<'a> {
         //
         // Returning `Some(sec_base)` signals that the loader must re-use that exact memory area.
         debug!("Memory successfully allocated for BOF at address (Module Stomping): {:?}", text_address);
-        let (sections, sec_base) = SectionMap::copy_sections(text_address, &self.coff);
+        let (sections, sec_base) = SectionMap::copy_sections(text_address, self.coff);
         Ok((sections, Some(sec_base)))
     }
 
