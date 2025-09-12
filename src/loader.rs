@@ -66,8 +66,8 @@ pub struct CoffeeLdr<'a> {
     /// Vector mapping the allocated memory sections.
     section_map: Vec<SectionMap>,
 
-    /// Map of functions `Symbol`.
-    symbols: Symbol,
+    /// Map of functions [`CoffSymbol`].
+    symbols: CoffSymbol,
 
     /// Indicates whether module stomping is enabled.
     ///
@@ -88,7 +88,7 @@ impl<'a> CoffeeLdr<'a> {
     ///
     /// # Returns
     ///
-    /// * `Ok(Self)` -  If the buffer is valid and the [`CoffSource`] instance is created successfully.
+    /// * `Ok(Self)` - If the buffer is valid and the [`CoffSource`] instance is created successfully.
     /// * `Err(CoffeeLdrError)` - If an error occurs during processing.
     ///
     /// # Examples
@@ -140,17 +140,16 @@ impl<'a> CoffeeLdr<'a> {
             CoffSource::Buffer(buffer) => Coff::from_buffer(buffer)?,
         };
 
-        // Returns the new `CoffeeLdr` object
         Ok(Self {
             coff,
             section_map: Vec::new(),
-            symbols: Symbol::default(),
+            symbols: CoffSymbol::default(),
             ..Default::default()
         })
     }
 
     /// Enables module stomping for a specified module.
-    pub fn module_stomping(mut self, module: &'a str) -> Self {
+    pub fn with_module_stomping(mut self, module: &'a str) -> Self {
         self.stomping = true;
         self.module = module;
         self
@@ -214,26 +213,259 @@ impl<'a> CoffeeLdr<'a> {
         // Allocate memory for loading COFF sections and store the allocated section mappings.
         // If module stomping is enabled, overwrite the specified module in memory.
         // Otherwise, allocate standalone memory for the BOF payload.
-        let (sections, sec_base) = if self.stomping {
-            self.alloc_with_stomping()?
-        } else {
-            self.alloc_bof_memory()?
-        };
-
+        let mem = CoffMemory::new(&self.coff, self.stomping, self.module);
+        let (sections, sec_base) = mem.alloc()?;
         self.section_map = sections;
 
         // Resolve external symbols (such as function addresses) and build a function lookup map.
         // When using module stomping, base resolution on the stomped module's memory address.
-        let (functions, symbols) = if self.stomping {
-            let addr = sec_base.ok_or(CoffeeLdrError::MissingStompingBaseAddress)?;
-            Symbol::with_address(&self.coff, addr)?
-        } else {
-            Symbol::new(&self.coff)?
-        };
-
+        let (functions, symbols) = CoffSymbol::new(&self.coff, self.stomping, sec_base)?;
         self.symbols = symbols;
 
         // Process relocations to correctly adjust symbol addresses based on memory layout.
+        let reloc = CoffRelocation::new(&self.coff, &self.section_map);
+        reloc.apply(&functions, &self.symbols)?;
+
+        // Adjust memory permissions for allocated sections.
+        self.section_map
+            .iter_mut()
+            .filter(|section| section.size > 0)
+            .try_for_each(|section| section.adjust_permissions())?;
+
+        Ok(())
+    }
+
+    /// Checks if the COFF file's architecture matches the architecture of the system.
+    #[inline]
+    fn check_architecture(&self) -> Result<()> {
+        match self.coff.arch {
+            CoffMachine::X32 => {
+                if cfg!(target_pointer_width = "64") {
+                    return Err(CoffeeLdrError::ArchitectureMismatch {
+                        expected: "x32",
+                        actual: "x64",
+                    });
+                }
+            }
+            CoffMachine::X64 => {
+                if cfg!(target_pointer_width = "32") {
+                    return Err(CoffeeLdrError::ArchitectureMismatch {
+                        expected: "x64",
+                        actual: "x32",
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Drop for CoffeeLdr<'_> {
+    fn drop(&mut self) {
+        // It doesn't free anything, because we've blocked memory from another module.
+        if self.stomping {
+            return;
+        }
+        
+        // Iterate over each section in the section map
+        let mut size = 0;
+        for section in self.section_map.iter_mut() {
+            // Release memory if the base pointer is not null
+            if !section.base.is_null() {
+                NtFreeVirtualMemory(
+                    NtCurrentProcess(),
+                    &mut section.base,
+                    &mut size,
+                    MEM_RELEASE
+                );
+            }
+        }
+
+        // Release memory for the function map if the address pointer is not null
+        if !self.symbols.address.is_null() {
+            NtFreeVirtualMemory(
+                NtCurrentProcess(),
+                unsafe { &mut *self.symbols.address },
+                &mut size,
+                MEM_RELEASE
+            );
+        }
+    }
+}
+
+/// Manages allocation and optional module stomping for COFF sections.
+struct CoffMemory<'a> {
+    /// Parsed COFF file to be loaded.
+    coff: &'a Coff<'a>,
+
+    /// Whether module stomping is enabled.
+    stomping: bool,
+
+    /// Name of the target module to stomp.
+    module: &'a str,
+}
+
+impl<'a> CoffMemory<'a> {
+    /// Creates a new [`CoffMemory`] instance.
+    pub fn new(coff: &'a Coff<'a>, stomping: bool, module: &'a str) -> Self {
+        Self {
+            coff,
+            stomping,
+            module,
+        }
+    }
+
+    /// Allocates memory for COFF sections. Uses either module stomping or fresh memory.
+    pub fn alloc(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
+        if self.stomping {
+            self.alloc_with_stomping()
+        } else {
+            self.alloc_bof_memory()
+        }
+    }
+
+    /// Allocates new virtual memory for loading the sections of the COFF file.
+    ///
+    /// This method reserves and commits a memory region for the BOF (Beacon Object File)
+    /// using `NtAllocateVirtualMemory`. The memory is writable and top-down allocated.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing a vector of section mappings and 
+    ///   `None` as no base address is reused.
+    /// * `Err(CoffeeLdrError)` - If memory allocation fails, returns a corresponding loader error.
+    fn alloc_bof_memory(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
+        let mut size = self.coff.size();
+        let mut addr = null_mut();
+        let status = NtAllocateVirtualMemory(
+            NtCurrentProcess(), 
+            &mut addr, 
+            0, 
+            &mut size, 
+            MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN, 
+            PAGE_READWRITE
+        );
+        
+        if status != STATUS_SUCCESS {
+            return Err(CoffeeLdrError::MemoryAllocationError(unsafe { GetLastError() }));
+        }
+
+        debug!("Memory successfully allocated for BOF at address: {:?}", addr);
+        let (sections, _) = SectionMap::copy_sections(addr, self.coff);
+        Ok((sections, None))
+    }
+
+    /// Overwrites an existing module's memory with the COFF payload (Module Stomping).
+    ///
+    /// This method locates the `.text` section of the specified module (from `self.module`)
+    /// and changes its memory protection to writable. It then copies the COFF sections into
+    /// that memory, effectively "stomping" the original module code.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing the section mappings and the base address.
+    /// * `Err(CoffeeLdrError)` - If the module cannot be found or memory protection cannot be changed.
+    fn alloc_with_stomping(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
+        let (mut text_address, mut size) = self.get_text_module()
+            .ok_or(CoffeeLdrError::StompingTextSectionNotFound)?;
+
+        // If the file is larger than the space inside the .text of the target module,
+        // we do not stomp
+        if self.coff.size() > size {
+            return Err(CoffeeLdrError::StompingSizeOverflow);
+        }
+
+        let mut old = 0;
+        if !NT_SUCCESS(NtProtectVirtualMemory(
+            NtCurrentProcess(), 
+            &mut text_address, 
+            &mut size, 
+            PAGE_READWRITE, 
+            &mut old
+        )) {
+            return Err(CoffeeLdrError::MemoryProtectionError(unsafe { GetLastError() }));
+        }
+
+        // This is necessary because REL32 instructions must remain within range, and allocating the `Symbol`
+        // elsewhere (e.g. with a distant `NtAllocateVirtualMemory`) could lead to crashes.
+        //
+        // Returning `Some(sec_base)` signals that the loader must re-use that exact memory area.
+        debug!("Memory successfully allocated for BOF at address (Module Stomping): {:?}", text_address);
+        let (sections, sec_base) = SectionMap::copy_sections(text_address, &self.coff);
+        Ok((sections, Some(sec_base)))
+    }
+
+    /// Locates the `.text` section of the specified module for stomping.
+    ///
+    /// Loads the target module without resolving imports (`DONT_RESOLVE_DLL_REFERENCES`)
+    /// and parses its PE headers to find the `.text` section.
+    ///
+    /// # Returns
+    ///
+    /// * `Some((*mut c_void, usize))` - A pointer to the start of the `.text` section and its size.
+    /// * `None` - If the module or the section cannot be located.
+    fn get_text_module(&self) -> Option<(*mut c_void, usize)> {
+        // Invoking LoadLibraryExA dynamically
+        let target = format!("{}\0", self.module);
+        let h_module = {
+            let handle = GetModuleHandle(self.module, None);
+            if handle.is_null() {
+                LoadLibraryExA(
+                    target.as_ptr(),
+                    null_mut(),
+                    DONT_RESOLVE_DLL_REFERENCES
+                )?
+            } else {
+                handle
+            }
+        };
+
+        if h_module.is_null() {
+            return None;
+        }
+
+        // Retrieving `.text` from the target module
+        let pe = PE::parse(h_module);
+        let section = pe.section_by_name(s!(".text"))?;
+        let ptr = (h_module as usize + section.VirtualAddress as usize) as *mut c_void;
+        let size = section.SizeOfRawData as usize;
+
+        Some((ptr, size))
+    }
+}
+
+/// Handles relocation of symbols for COFF sections.
+struct CoffRelocation<'a> {   
+    /// Reference to the parsed COFF object containing sections and symbols.
+    coff: &'a Coff<'a>,
+
+    /// List of mapped sections in memory, used to compute relocation targets.
+    section_map: &'a [SectionMap],
+}
+
+impl<'a> CoffRelocation<'a> {
+    /// Creates a new [`CoffRelocation`] instance.
+    pub fn new(coff: &'a Coff, section_map: &'a [SectionMap]) -> Self {
+        Self { coff, section_map }
+    }
+
+    /// Applies relocations to all sections in the COFF file.
+    ///
+    /// # Arguments
+    /// 
+    /// * `functions` - Map of resolved symbol names to their function addresses.
+    /// * `symbols` - Pointer to the symbol table in memory.
+    ///
+    /// # Returns
+    /// 
+    /// * `Ok(())` - On success.
+    /// * `Err(CoffeeLdrError)` - If any relocation fails.
+    pub fn apply(
+        &self,
+        functions: &BTreeMap<String, usize>,
+        symbols: &CoffSymbol
+    ) -> Result<()> {
         let mut index = 0;
         for (i, section) in self.coff.sections.iter().enumerate() {
             // Retrieve relocation entries for the current section.
@@ -250,16 +482,16 @@ impl<'a> CoffeeLdr<'a> {
                 let name = self.coff.get_symbol_name(symbol);
                 if let Some(function_address) = functions.get(&name).map(|&addr| addr as *mut c_void) {
                     unsafe {
-                        self.symbols
+                        symbols
                             .address
                             .add(index)
                             .write_volatile(function_address);
 
                         // Apply the relocation using the resolved function address.
-                        self.process_relocation(
+                        self.process(
                             symbol_reloc_addr, 
                             function_address, 
-                            self.symbols.address.add(index), 
+                            symbols.address.add(index), 
                             relocation, 
                             symbol
                         )?;
@@ -268,7 +500,7 @@ impl<'a> CoffeeLdr<'a> {
                     index += 1;
                 } else {
                     // Apply the relocation but without a resolved function address (null pointer).
-                    self.process_relocation(
+                    self.process(
                         symbol_reloc_addr, 
                         null_mut(), 
                         null_mut(), 
@@ -279,8 +511,6 @@ impl<'a> CoffeeLdr<'a> {
             }
         }
 
-        // Adjust memory permissions for allocated sections (e.g., marking executable sections).
-        self.adjust_permissions()?;
         Ok(())
     }
 
@@ -299,7 +529,7 @@ impl<'a> CoffeeLdr<'a> {
     /// * `Ok(())` - If the relocation was successfully processed.
     /// * `Err(CoffeeLdrError)` - If an unsupported or invalid relocation type is encountered,
     ///   an error is returned indicating the type of relocation that caused the failure.
-    fn process_relocation(
+    fn process(
         &self, 
         reloc_addr: *mut c_void, 
         function_address: *mut c_void, 
@@ -396,181 +626,6 @@ impl<'a> CoffeeLdr<'a> {
 
         Ok(())
     }
-
-    /// Set the memory permissions for each section loaded.
-    fn adjust_permissions(&mut self) -> Result<()> {
-        self.section_map
-            .iter_mut()
-            .filter(|section| section.size > 0)
-            .try_for_each(|section| section.adjust_permissions())
-    }
-
-    /// Allocates new virtual memory for loading the sections of the COFF file.
-    ///
-    /// This method reserves and commits a memory region for the BOF (Beacon Object File)
-    /// using `NtAllocateVirtualMemory`. The memory is writable and top-down allocated.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing a vector of section mappings and 
-    ///   `None` as no base address is reused.
-    /// * `Err(CoffeeLdrError)` - If memory allocation fails, returns a corresponding loader error.
-    fn alloc_bof_memory(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
-        let mut size = self.coff.size();
-        let mut addr = null_mut();
-        let status = NtAllocateVirtualMemory(
-            NtCurrentProcess(), 
-            &mut addr, 
-            0, 
-            &mut size, 
-            MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN, 
-            PAGE_READWRITE
-        );
-        
-        if status != STATUS_SUCCESS {
-            return Err(CoffeeLdrError::MemoryAllocationError(unsafe { GetLastError() }));
-        }
-
-        debug!("Memory successfully allocated for BOF at address: {:?}", addr);
-        let (sections, _) = SectionMap::copy_sections(addr, &self.coff);
-        Ok((sections, None))
-    }
-
-    /// Overwrites an existing module's memory with the COFF payload (Module Stomping).
-    ///
-    /// This method locates the `.text` section of the specified module (from `self.module`)
-    /// and changes its memory protection to writable. It then copies the COFF sections into
-    /// that memory, effectively "stomping" the original module code.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok((Vec<SectionMap>, Option<*mut c_void>))` - A tuple containing the section mappings and the base address.
-    /// * `Err(CoffeeLdrError)` - If the module cannot be found or memory protection cannot be changed.
-    fn alloc_with_stomping(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
-        let (mut text_address, mut size) = self.get_text_module()
-            .ok_or(CoffeeLdrError::StompingTextSectionNotFound)?;
-
-        // If the file is larger than the space inside the .text of the target module,
-        // we do not stomp
-        if self.coff.size() > size {
-            return Err(CoffeeLdrError::StompingSizeOverflow);
-        }
-
-        let mut old = 0;
-        if !NT_SUCCESS(NtProtectVirtualMemory(
-            NtCurrentProcess(), 
-            &mut text_address, 
-            &mut size, 
-            PAGE_READWRITE, 
-            &mut old
-        )) {
-            return Err(CoffeeLdrError::MemoryProtectionError(unsafe { GetLastError() }));
-        }
-
-        // This is necessary because REL32 instructions must remain within range, and allocating the `Symbol`
-        // elsewhere (e.g. with a distant `NtAllocateVirtualMemory`) could lead to crashes.
-        //
-        // Returning `Some(sec_base)` signals that the loader must re-use that exact memory area.
-        debug!("Memory successfully allocated for BOF at address (Module Stomping): {:?}", text_address);
-        let (sections, sec_base) = SectionMap::copy_sections(text_address, &self.coff);
-        Ok((sections, Some(sec_base)))
-    }
-
-    /// Locates the `.text` section of the specified module for stomping.
-    ///
-    /// Loads the target module without resolving imports (`DONT_RESOLVE_DLL_REFERENCES`)
-    /// and parses its PE headers to find the `.text` section.
-    ///
-    /// # Returns
-    ///
-    /// * `Some((*mut c_void, usize))` - A pointer to the start of the `.text` section and its size.
-    /// * `None` - If the module or the section cannot be located.
-    fn get_text_module(&self) -> Option<(*mut c_void, usize)> {
-        // Invoking LoadLibraryExA dynamically
-        let target = format!("{}\0", self.module);
-        let module = {
-            let handle = GetModuleHandle(self.module, None);
-            if handle.is_null() {
-                LoadLibraryExA(
-                    target.as_ptr(),
-                    null_mut(),
-                    DONT_RESOLVE_DLL_REFERENCES
-                )?
-            } else {
-                handle
-            }
-        };
-
-        if module.is_null() {
-            return None;
-        }
-
-        // Retrieving `.text` from the target module
-        let pe = PE::parse(module);
-        let section = pe.section_by_name(s!(".text"))?;
-        let ptr = (module as usize + section.VirtualAddress as usize) as *mut c_void;
-        let size = section.SizeOfRawData as usize;
-
-        Some((ptr, size))
-    }
-
-    /// Checks if the COFF file's architecture matches the architecture of the system.
-    #[inline]
-    fn check_architecture(&self) -> Result<()> {
-        match self.coff.arch {
-            CoffMachine::X32 => {
-                if cfg!(target_pointer_width = "64") {
-                    return Err(CoffeeLdrError::ArchitectureMismatch {
-                        expected: "x32",
-                        actual: "x64",
-                    });
-                }
-            }
-            CoffMachine::X64 => {
-                if cfg!(target_pointer_width = "32") {
-                    return Err(CoffeeLdrError::ArchitectureMismatch {
-                        expected: "x64",
-                        actual: "x32",
-                    });
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl Drop for CoffeeLdr<'_> {
-    fn drop(&mut self) {
-        // It doesn't free anything, because we've blocked memory from another module.
-        if self.stomping {
-            return;
-        }
-        
-        // Iterate over each section in the section map
-        let mut size = 0;
-        for section in self.section_map.iter_mut() {
-            // Release memory if the base pointer is not null
-            if !section.base.is_null() {
-                NtFreeVirtualMemory(
-                    NtCurrentProcess(),
-                    &mut section.base,
-                    &mut size,
-                    MEM_RELEASE
-                );
-            }
-        }
-
-        // Release memory for the function map if the address pointer is not null
-        if !self.symbols.address.is_null() {
-            NtFreeVirtualMemory(
-                NtCurrentProcess(),
-                unsafe { &mut *self.symbols.address },
-                &mut size,
-                MEM_RELEASE
-            );
-        }
-    }
 }
 
 /// Maximum number of symbols that the function map can handle.
@@ -578,62 +633,44 @@ const MAX_SYMBOLS: usize = 600;
 
 /// Represents a mapping of external symbols (functions) to their memory addresses.
 #[derive(Debug, Clone, Copy)]
-struct Symbol {
+struct CoffSymbol {
     /// A pointer to an array of pointers, each pointing to an external function.
     address: *mut *mut c_void,
 }
 
-impl Symbol {
-    /// Creates a new [`Symbol`] and resolves external symbols for the given COFF file.
-    ///
-    /// # Arguments
-    ///
-    /// * `coff` - A reference to the parsed COFF object.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok((BTreeMap<String, usize>, Symbol))` - A tuple containing the resolved symbols.
-    /// * `Err(CoffeeLdrError)` - If memory allocation fails or symbol resolution exceeds the limit.
-    fn new(coff: &Coff) -> Result<(BTreeMap<String, usize>, Symbol)> {
+impl CoffSymbol {
+    /// Creates a new [`CoffSymbol`] instance.
+    pub fn new(
+        coff: &Coff,
+        stomping: bool,
+        base_addr: Option<*mut c_void>,
+    ) -> Result<(BTreeMap<String, usize>, Self)> {        
         let symbols = Self::process_symbols(coff)?;
-        let mut size = MAX_SYMBOLS * size_of::<*mut c_void>();
-        let mut addr = null_mut::<c_void>();
-        let status = NtAllocateVirtualMemory(
-            NtCurrentProcess(), 
-            &mut addr, 
-            0, 
-            &mut size, 
-            MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN, 
-            PAGE_READWRITE
-        );
         
-        if addr.is_null() || status != STATUS_SUCCESS {
-            return Err(CoffeeLdrError::MemoryAllocationError(unsafe { GetLastError() }));
-        }
+        // When stomping, we must reuse the memory at `base_addr`.
+        let address = if stomping {
+            let addr = base_addr.ok_or(CoffeeLdrError::MissingStompingBaseAddress)?;
+            addr as *mut *mut c_void
+        } else {
+            let mut size = MAX_SYMBOLS * size_of::<*mut c_void>();
+            let mut addr = null_mut();
+            let status = NtAllocateVirtualMemory(
+                NtCurrentProcess(),
+                &mut addr,
+                0,
+                &mut size,
+                MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN,
+                PAGE_READWRITE,
+            );
 
-        let address = addr as *mut *mut c_void;
+            if addr.is_null() || status != STATUS_SUCCESS {
+                return Err(CoffeeLdrError::MemoryAllocationError(unsafe { GetLastError() }));
+            }
+
+            addr as *mut *mut c_void
+        };
+
         Ok((symbols, Self { address }))
-    }
-
-    /// Creates a [`Symbol`] using a specified base address for symbol resolution.
-    ///
-    /// # Arguments
-    ///
-    /// * `coff` - A reference to the parsed COFF object.
-    /// * `addr` - A pointer to the base address where the COFF sections were loaded in memory.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok((BTreeMap<String, usize>, Symbol))` - A tuple containing the resolved symbol.
-    /// * `Err(CoffeeLdrError)` - If symbol processing fails.
-    pub fn with_address(coff: &Coff, addr: *mut c_void) -> Result<(BTreeMap<String, usize>, Symbol)> {
-        let symbols = Self::process_symbols(coff)?;
-        Ok((
-            symbols,
-            Self {
-                address: addr as *mut *mut c_void,
-            },
-        ))
     }
 
     /// Processes the external symbols in the COFF file and resolves their addresses.
@@ -723,7 +760,7 @@ impl Symbol {
     }
 }
 
-impl Default for Symbol {
+impl Default for CoffSymbol {
     fn default() -> Self {
         Self { address: null_mut() }
     }

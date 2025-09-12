@@ -118,4 +118,3 @@ impl BeaconPack {
         self.buffer.extend_from_slice(&value.to_le_bytes());
     }
 }
-
