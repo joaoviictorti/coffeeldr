@@ -619,7 +619,8 @@ impl CoffSymbol {
         coff: &Coff,
         stomping: bool,
         base_addr: Option<*mut c_void>,
-    ) -> Result<(BTreeMap<String, usize>, Self)> {        
+    ) -> Result<(BTreeMap<String, usize>, Self)> {
+        // Resolves the symbols of the coff file
         let symbols = Self::process_symbols(coff)?;
         
         // When stomping, we must reuse the memory at `base_addr`.
