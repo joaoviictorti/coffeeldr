@@ -208,7 +208,7 @@ impl<'a> CoffeeLdr<'a> {
     /// Prepares the environment for the execution of the COFF file.
     fn prepare(&mut self) -> Result<()> {
         // Verify that the COFF file's architecture.
-        self.check_architecture()?;
+        self.coff.arch.check_architecture()?;
 
         // Allocate memory for loading COFF sections and store the allocated section mappings.
         // If module stomping is enabled, overwrite the specified module in memory.
@@ -231,31 +231,6 @@ impl<'a> CoffeeLdr<'a> {
             .iter_mut()
             .filter(|section| section.size > 0)
             .try_for_each(|section| section.adjust_permissions())?;
-
-        Ok(())
-    }
-
-    /// Checks if the COFF file's architecture matches the architecture of the system.
-    #[inline]
-    fn check_architecture(&self) -> Result<()> {
-        match self.coff.arch {
-            CoffMachine::X32 => {
-                if cfg!(target_pointer_width = "64") {
-                    return Err(CoffeeLdrError::ArchitectureMismatch {
-                        expected: "x32",
-                        actual: "x64",
-                    });
-                }
-            }
-            CoffMachine::X64 => {
-                if cfg!(target_pointer_width = "32") {
-                    return Err(CoffeeLdrError::ArchitectureMismatch {
-                        expected: "x64",
-                        actual: "x32",
-                    });
-                }
-            }
-        }
 
         Ok(())
     }

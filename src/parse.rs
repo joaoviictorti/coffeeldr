@@ -10,7 +10,10 @@ use binrw::{BinRead, binread};
 use binrw::io::Cursor;
 
 use super::{debug, warn};
-use super::error::CoffError;
+use super::error::{
+    CoffError,
+    CoffeeLdrError
+};
 
 // Architecture definitions for x64
 const COFF_MACHINE_X64: u16 = 0x8664;
@@ -249,6 +252,33 @@ pub enum CoffMachine {
 
     /// 32-bit architecture.
     X32,
+}
+
+impl CoffMachine {
+    /// Checks if the COFF file's architecture matches the architecture of the system.
+    #[inline]
+    pub fn check_architecture(&self) -> Result<(), CoffeeLdrError> {
+        match self {
+            CoffMachine::X32 => {
+                if cfg!(target_pointer_width = "64") {
+                    return Err(CoffeeLdrError::ArchitectureMismatch {
+                        expected: "x32",
+                        actual: "x64",
+                    });
+                }
+            }
+            CoffMachine::X64 => {
+                if cfg!(target_pointer_width = "32") {
+                    return Err(CoffeeLdrError::ArchitectureMismatch {
+                        expected: "x64",
+                        actual: "x32",
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Represents the COFF data source.
