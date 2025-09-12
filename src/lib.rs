@@ -9,7 +9,7 @@ extern crate alloc;
 mod beacon;
 mod error;
 mod parse;
-mod utils;
+mod util;
 mod loader;
 mod ffi;
 mod beacon_pack;

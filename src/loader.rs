@@ -31,7 +31,7 @@ use windows_sys::Win32::{
     },
 };
 
-use super::utils::read_file;
+use super::util::read_file;
 use super::{debug, info, warn};
 use super::error::{
     CoffError, 
