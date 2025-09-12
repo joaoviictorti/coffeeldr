@@ -74,7 +74,7 @@ coffee.run("entry_point_function_name", None, None).unwrap();
 ### Using Module Stomping
 
 Module stomping replaces the `.text` section of a loaded module with the COFF code.
-```rs
+```rust
 let mut coffee = CoffeeLdr::new("path/to/coff_file.o")?
     .with_module_stomping("xpsservices.dll"); // specify the module to stomp
 
