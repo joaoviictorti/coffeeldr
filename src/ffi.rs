@@ -17,7 +17,6 @@ pub type NtFreeVirtualMemoryFn = unsafe extern "system" fn(
 ) -> NTSTATUS;
 
 #[inline]
-#[allow(non_snake_case)]
 pub fn NtFreeVirtualMemory(
     process_handle: *mut c_void, 
     base_address: *mut *mut c_void, 
@@ -36,7 +35,6 @@ pub fn NtFreeVirtualMemory(
 }
 
 #[inline]
-#[allow(non_snake_case)]
 pub fn LoadLibraryExA(
     lp_lib_file_name: *const u8, 
     h_file: *mut c_void, 

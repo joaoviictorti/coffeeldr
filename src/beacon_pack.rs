@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use binrw::io::Write;
 use hex::FromHex;
 
-type Result<T> = core::result::Result<T, super::error::BeaconPackError>;
+type BeaconResult<T> = core::result::Result<T, super::error::BeaconPackError>;
 
 /// A struct that represents a buffer for packing data with size tracking.
 #[derive(Default)]
@@ -16,7 +16,7 @@ pub struct BeaconPack {
 
 impl BeaconPack {
     /// Returns the buffer with the total size packed at the beginning.
-    pub fn getbuffer(&self) -> Result<Vec<u8>> {
+    pub fn getbuffer(&self) -> BeaconResult<Vec<u8>> {
         let mut buf = Vec::with_capacity(4 + self.buffer.len());
         buf.extend_from_slice(&self.size.to_le_bytes());
         buf.extend_from_slice(&self.buffer);
@@ -25,13 +25,13 @@ impl BeaconPack {
     }
 
     /// Returns the buffer encoded in hexadecimal format (as bytes).
-    pub fn get_buffer_hex(&self) -> Result<Vec<u8>> {
+    pub fn get_buffer_hex(&self) -> BeaconResult<Vec<u8>> {
         let buf = self.getbuffer()?;
         Ok(Vec::from_hex(hex::encode(&buf))?)
     }
 
     /// Adds a 2-byte short value to the buffer.
-    pub fn addshort(&mut self, short: i16) -> Result<()> {
+    pub fn addshort(&mut self, short: i16) -> BeaconResult<()> {
         self.write_i16(short);
         self.size += 2;
 
@@ -39,7 +39,7 @@ impl BeaconPack {
     }
 
     /// Adds a 4-byte integer to the buffer.
-    pub fn addint(&mut self, int: i32) -> Result<()> {
+    pub fn addint(&mut self, int: i32) -> BeaconResult<()> {
         self.write_i32(int);
         self.size += 4;
 
@@ -47,7 +47,7 @@ impl BeaconPack {
     }
 
     /// Adds a UTF-8 string to the buffer.
-    pub fn addstr(&mut self, s: &str) -> Result<()> {
+    pub fn addstr(&mut self, s: &str) -> BeaconResult<()> {
         let s_bytes = s.as_bytes();
         let length = s_bytes.len() as u32 + 1;
         self.write_u32(length);
@@ -61,7 +61,7 @@ impl BeaconPack {
     }
 
     /// Adds a UTF-16 wide string to the buffer.
-    pub fn addwstr(&mut self, s: &str) -> Result<()> {
+    pub fn addwstr(&mut self, s: &str) -> BeaconResult<()> {
         let s_wide: Vec<u16> = s.encode_utf16().collect();
         let length = (s_wide.len() as u32 * 2) + 2;
         self.write_u32(length);
@@ -76,7 +76,7 @@ impl BeaconPack {
     }
 
     /// Adds a binary data block to the buffer.
-    pub fn addbin(&mut self, data: &[u8]) -> Result<()> {
+    pub fn addbin(&mut self, data: &[u8]) -> BeaconResult<()> {
         let length = data.len() as u32;
         self.write_u32(length);
         self.buffer.write_all(data)?;

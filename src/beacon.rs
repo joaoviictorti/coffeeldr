@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use alloc::{
     string::{String, ToString},
     vec::Vec,
@@ -30,7 +28,7 @@ use windows_sys::Win32::{
     },
 };
 
-use super::error::{CoffeeLdrError, Result};
+use super::error::{CoffeeLdrError, CoffResult};
 
 #[allow(dead_code)]
 const CALLBACK_OUTPUT: u32 = 0x0;
@@ -104,32 +102,32 @@ impl fmt::Display for BeaconOutputBuffer {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct Data {
-    /// The original buffer [so we can free it]
+    /// The original buffer.
     original: *mut c_char,
 
-    /// Current pointer into our buffer
+    /// Current pointer into our buffer.
     buffer: *mut c_char,
 
-    /// Remaining length of data
+    /// Remaining length of data.
     length: c_int,
 
-    /// Total size of this buffer
+    /// Total size of this buffer.
     size: c_int,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct Format {
-    /// The original buffer [so we can free it]
+    /// The original buffer.
     original: *mut c_char,
 
-    /// Current pointer into our buffer
+    /// Current pointer into our buffer.
     buffer: *mut c_char,
 
-    /// Remaining length of data
+    /// Remaining length of data.
     length: c_int,
 
-    /// Total size of this buffer
+    /// Total size of this buffer.
     size: c_int,
 }
 
@@ -141,9 +139,8 @@ struct Format {
 ///
 /// # Returns
 ///
-/// * `Ok(usize)` - The function's address if found.
-/// * `Err(CoffeeLdrError)` - If the function is not found.
-pub fn get_function_internal_address(name: &str) -> Result<usize> {
+/// The function's address if found.
+pub fn get_function_internal_address(name: &str) -> CoffResult<usize> {
     match jenkins3(name) {
         // Output
         3210322847u32 => Ok(BeaconPrintf as usize),
@@ -190,8 +187,7 @@ pub fn get_function_internal_address(name: &str) -> Result<usize> {
 ///
 /// # Returns
 ///
-/// * `Some(BeaconOutputBuffer)` - A cloned copy of the current output buffer if successful.
-/// * `None` - If locking the buffer fails.
+///  A cloned copy of the current output buffer if successful.
 pub fn get_output_data() -> Option<BeaconOutputBuffer> {
     let mut beacon = BEACON_BUFFER.lock();
     if beacon.buffer.is_empty() {
@@ -253,7 +249,7 @@ fn BeaconFormatReset(format: *mut Format) {
 ///
 /// # Returns
 ///
-/// * Returns a pointer to the formatted buffer, or `null_mut()` if an error occurs.
+/// Pointer to the formatted buffer, or `null_mut()` if an error occurs.
 fn BeaconFormatToString(format: *mut Format, size: *mut c_int) -> *mut c_char {
     if format.is_null() || size.is_null() {
         return null_mut();
@@ -377,7 +373,7 @@ unsafe extern "C" fn BeaconFormatPrintf(format: *mut Format, fmt: *const c_char,
 ///
 /// # Returns
 ///
-/// * The extracted short value, or 0 if extraction fails.
+/// The extracted short value, or 0 if extraction fails.
 fn BeaconDataShort(data: *mut Data) -> c_short {
     if data.is_null() {
         return 0;
@@ -403,7 +399,7 @@ fn BeaconDataShort(data: *mut Data) -> c_short {
 ///
 /// # Returns
 ///
-/// * The extracted integer, or 0 if extraction fails.
+/// The extracted integer, or 0 if extraction fails.
 fn BeaconDataInt(data: *mut Data) -> c_int {
     if data.is_null() {
         return 0;
@@ -430,7 +426,7 @@ fn BeaconDataInt(data: *mut Data) -> c_int {
 ///
 /// # Returns
 ///
-/// * Pointer to the extracted data, or `null_mut()` if extraction fails.
+/// Pointer to the extracted data, or `null_mut()` if extraction fails.
 fn BeaconDataExtract(data: *mut Data, size: *mut c_int) -> *mut c_char {
     if data.is_null() {
         return null_mut();
@@ -486,7 +482,7 @@ fn BeaconDataParse(data: *mut Data, buffer: *mut c_char, size: c_int) {
 ///
 /// # Returns
 ///
-/// * The remaining length of the buffer.
+/// The remaining length of the buffer.
 fn BeaconDataLength(data: *const Data) -> c_int {
     if data.is_null() {
         return 0;
@@ -503,7 +499,7 @@ fn BeaconDataLength(data: *const Data) -> c_int {
 ///
 /// # Returns
 ///
-/// * Pointer to the output data, or `null_mut()` if retrieval fails.
+/// Pointer to the output data, or `null_mut()` if retrieval fails.
 fn BeaconGetOutputData(outsize: *mut c_int) -> *mut c_char {
     unsafe {
         let mut beacon = BEACON_BUFFER.lock();
@@ -565,7 +561,7 @@ fn BeaconRevertToken() {
 ///
 /// # Returns
 ///
-/// *  Returns a non-zero value on success, or 0 on failure.
+/// A non-zero value on success, or 0 on failure.
 fn BeaconUseToken(token: HANDLE) -> i32 {
     unsafe { SetThreadToken(null_mut(), token) }
 }
@@ -574,7 +570,7 @@ fn BeaconUseToken(token: HANDLE) -> i32 {
 ///
 /// # Arguments
 ///
-/// * A pointer to a `PROCESS_INFORMATION` struct containing process handles.
+/// A pointer to a `PROCESS_INFORMATION` struct containing process handles.
 fn BeaconCleanupProcess(info: *const PROCESS_INFORMATION) {
     unsafe {
         CloseHandle((*info).hProcess);
@@ -586,7 +582,7 @@ fn BeaconCleanupProcess(info: *const PROCESS_INFORMATION) {
 ///
 /// # Returns
 ///
-/// * Returns 1 if the process is elevated, otherwise 0.
+/// 1 if the process is elevated, otherwise 0.
 fn BeaconIsAdmin() -> u32 {
     let mut h_token = null_mut();
 
@@ -619,7 +615,7 @@ fn BeaconIsAdmin() -> u32 {
 ///
 /// # Returns
 ///
-/// * The integer with swapped endianness.
+/// The integer with swapped endianness.
 fn swap_endianness(src: u32) -> u32 {
     // Check if the system is little-endian
     if cfg!(target_endian = "little") {
@@ -641,7 +637,7 @@ fn swap_endianness(src: u32) -> u32 {
 ///
 /// # Returns
 ///
-/// * Returns 1 on success or 0 on failure.
+/// 1 on success or 0 on failure.
 fn toWideChar(src: *const c_char, dst: *mut u16, max: c_int) -> c_int {
     if src.is_null() || dst.is_null() || max < size_of::<u16>() as c_int {
         return 0;
@@ -769,7 +765,7 @@ fn BeaconInjectProcess(
 ///
 /// # Returns
 ///
-/// * A pointer to the requested section of the buffer, or `null_mut()` if extraction fails.
+/// A pointer to the requested section of the buffer, or `null_mut()` if extraction fails.
 fn BeaconDataPtr(data: *mut Data, size: c_int) -> *mut c_char {
     if data.is_null() || size <= 0 {
         return null_mut();

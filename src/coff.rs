@@ -1,5 +1,3 @@
-#![allow(non_snake_case, non_camel_case_types)]
-
 use alloc::{
     string::{String, ToString},
     vec::Vec,
@@ -60,15 +58,8 @@ impl<'a> Coff<'a> {
     /// # Arguments
     ///
     /// * `buffer` - Buffer of the Coff file to be analyzed.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Self)` - Returns a [`Coff`] instance if parsing succeeds.
-    /// * `Err(CoffError)` - If parsing fails due to an invalid buffer or file structure.
-    pub fn from_buffer(buffer: &'a [u8]) -> Result<Self, CoffError> {
-        // Parse the file
-        let coff = Self::parse(buffer)?;
-        Ok(coff)
+    pub fn from_slice(buffer: &'a [u8]) -> Result<Self, CoffError> {
+        Ok(Self::parse(buffer)?)
     }
 
     /// Internal function to parse the COFF file from a byte buffer.
@@ -79,8 +70,7 @@ impl<'a> Coff<'a> {
     ///
     /// # Returns
     ///
-    /// * `Ok(Self)` - If the buffer is successfully parsed into a `Coff` structure.
-    /// * `Err(CoffError)` - If parsing fails.
+    /// If the buffer is successfully parsed into a `Coff` structure.
     fn parse(buffer: &'a [u8]) -> Result<Self, CoffError> {
         debug!("Parsing COFF file header, buffer size: {}", buffer.len());
 

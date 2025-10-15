@@ -16,7 +16,7 @@ use windows_sys::Win32::{
     },
 };
 
-use super::error::{CoffeeLdrError, Result};
+use super::error::{CoffeeLdrError, CoffResult};
 
 /// Reads the entire contents of a file into memory using the Windows API.
 ///
@@ -26,8 +26,8 @@ use super::error::{CoffeeLdrError, Result};
 ///
 /// # Returns
 ///
-/// * Containing the file's contents if the operation succeeds.
-pub fn read_file(name: &str) -> Result<Vec<u8>> {
+/// Containing the file's contents if the operation succeeds.
+pub fn read_file(name: &str) -> CoffResult<Vec<u8>> {
     let file_name = CString::new(name)
         .map_err(|_| CoffeeLdrError::GenericError(s!("Invalid cstring")))?;
     let h_file = unsafe {
@@ -66,7 +66,6 @@ pub fn read_file(name: &str) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// Logs a `debug` message in debug builds only.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! debug {
@@ -79,7 +78,6 @@ macro_rules! debug {
     }};
 }
 
-/// Logs an `info` message in debug builds only.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! info {
@@ -92,7 +90,6 @@ macro_rules! info {
     }};
 }
 
-/// Logs a `warn` message in debug builds only.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! warn {
