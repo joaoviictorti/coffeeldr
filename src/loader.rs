@@ -166,7 +166,7 @@ impl<'a> CoffeeLdr<'a> {
     ///  
     /// let mut coffee = CoffeeLdr::new("whoami.o").expect("CoffeeLdr Failed With Error");
     /// match coffee.run("go", None, None) {
-    ///     Ok(CoffResult) => println!("[+] Coff executed: \n{CoffResult}"),
+    ///     Ok(result) => println!("[+] Coff executed: \n{result}"),
     ///     Err(err_code) => eprintln!("[!] Error: {:?}", err_code)
     /// }
     /// ```
