@@ -59,7 +59,7 @@ impl<'a> Coff<'a> {
     ///
     /// * `buffer` - Buffer of the Coff file to be analyzed.
     pub fn from_slice(buffer: &'a [u8]) -> Result<Self, CoffError> {
-        Ok(Self::parse(buffer)?)
+        Self::parse(buffer)
     }
 
     /// Internal function to parse the COFF file from a byte buffer.
