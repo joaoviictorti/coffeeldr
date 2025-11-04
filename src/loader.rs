@@ -661,7 +661,16 @@ impl<'a> CoffRelocation<'a> {
         Self { coff, section_map }
     }
 
-    /// Applies relocations to all sections in the COFF file.
+    /// Applies relocations for all sections.
+    ///
+    /// # Arguments
+    /// 
+    /// * `functions` - Map of resolved symbol names to their function addresses.
+    /// * `symbols` - Pointer to the symbol table in memory.
+    ///
+    /// # Errors
+    /// 
+    /// Returns an error if any relocation type is invalid or unsupported.
     pub fn apply_relocations(
         &self,
         functions: &BTreeMap<String, usize>,
@@ -715,7 +724,19 @@ impl<'a> CoffRelocation<'a> {
         Ok(())
     }
 
-    /// Processes the relocation of symbols in a COFF file.
+    /// Applies a single relocation entry.
+    ///
+    /// # Arguments
+    ///
+    /// * `reloc_addr` - Memory address where relocation applies.  
+    /// * `function_address` - Resolved function or symbol address (can be null).  
+    /// * `symbols` - Function map pointer used for external symbols.  
+    /// * `relocation` - COFF relocation entry (`IMAGE_RELOCATION`).  
+    /// * `symbol` - Symbol associated with this relocation (`IMAGE_SYMBOL`).  
+    ///
+    /// # Errors
+    /// 
+    /// Returns `InvalidRelocationType` if relocation type is unsupported.
     fn process_relocations(
         &self, 
         reloc_addr: *mut c_void, 
