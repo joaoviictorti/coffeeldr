@@ -563,7 +563,7 @@ impl SectionMap {
     ///
     /// # Returns
     ///
-    /// sA vector containing the mapping of each section.
+    /// A vector containing the mapping of each section.
     fn copy_sections(virt_addr: *mut c_void, coff: &Coff) -> (Vec<SectionMap>, *mut c_void) {
         unsafe {
             let sections = &coff.sections;
@@ -715,7 +715,7 @@ impl<'a> CoffRelocation<'a> {
         Ok(())
     }
 
-    /// Processes the relocation of symbols in a COFF (Common Object File Format) file.
+    /// Processes the relocation of symbols in a COFF file.
     fn process_relocations(
         &self, 
         reloc_addr: *mut c_void, 
