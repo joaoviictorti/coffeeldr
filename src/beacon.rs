@@ -28,7 +28,7 @@ use windows_sys::Win32::{
     },
 };
 
-use super::error::{CoffeeLdrError, CoffResult};
+use super::error::{CoffeeLdrError, Result};
 
 #[allow(dead_code)]
 const CALLBACK_OUTPUT: u32 = 0x0;
@@ -140,7 +140,7 @@ struct Format {
 /// # Returns
 ///
 /// The function's address if found.
-pub fn get_function_internal_address(name: &str) -> CoffResult<usize> {
+pub fn get_function_internal_address(name: &str) -> Result<usize> {
     match jenkins3(name) {
         // Output
         3210322847u32 => Ok(BeaconPrintf as usize),

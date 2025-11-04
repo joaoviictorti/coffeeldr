@@ -46,7 +46,7 @@ use super::{debug, info, warn};
 use super::error::{
     CoffError, 
     CoffeeLdrError, 
-    CoffResult
+    Result
 };
 use super::coff::{
     Coff,
@@ -121,7 +121,7 @@ impl<'a> CoffeeLdr<'a> {
     ///     Err(e) => eprintln!("Error loading COFF: {:?}", e),
     /// }
     /// ```
-    pub fn new<T: Into<CoffSource<'a>>>(source: T) -> CoffResult<Self> {
+    pub fn new<T: Into<CoffSource<'a>>>(source: T) -> Result<Self> {
         // Processes COFF based on the source (file or buffer)
         let coff = match source.into() {
             CoffSource::File(path) => {
@@ -176,7 +176,7 @@ impl<'a> CoffeeLdr<'a> {
     ///     Err(err_code) => eprintln!("[!] Error: {:?}", err_code)
     /// }
     /// ```
-    pub fn run(&mut self, entry: &str, args: Option<*mut u8>, argc: Option<usize>) -> CoffResult<String> {
+    pub fn run(&mut self, entry: &str, args: Option<*mut u8>, argc: Option<usize>) -> Result<String> {
         info!("Preparing environment for COFF execution.");
 
         // Prepares the environment to execute the COFF file
@@ -203,7 +203,7 @@ impl<'a> CoffeeLdr<'a> {
     }
 
     /// Prepares the environment for the execution of the COFF file.
-    fn prepare(&mut self) -> CoffResult<()> {
+    fn prepare(&mut self) -> Result<()> {
         // Verify that the COFF file's architecture.
         self.coff.arch.check_architecture()?;
 
@@ -289,7 +289,7 @@ impl<'a> CoffMemory<'a> {
     }
 
     /// Allocates memory for COFF sections.
-    pub fn alloc(&self) -> CoffResult<(Vec<SectionMap>, Option<*mut c_void>)> {
+    pub fn alloc(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
         if self.stomping {
             self.alloc_with_stomping()
         } else {
@@ -302,7 +302,7 @@ impl<'a> CoffMemory<'a> {
     /// # Returns
     ///
     /// A tuple containing a vector of section mappings and `None` as no base address is reused.
-    fn alloc_bof_memory(&self) -> CoffResult<(Vec<SectionMap>, Option<*mut c_void>)> {
+    fn alloc_bof_memory(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
         let mut size = self.coff.size();
         let mut addr = null_mut();
         let status = NtAllocateVirtualMemory(
@@ -332,7 +332,7 @@ impl<'a> CoffMemory<'a> {
     /// # Returns
     ///
     /// A tuple containing the section mappings and the base address.
-    fn alloc_with_stomping(&self) -> CoffResult<(Vec<SectionMap>, Option<*mut c_void>)> {
+    fn alloc_with_stomping(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
         let (mut text_address, mut size) = self.get_text_module()
             .ok_or(CoffeeLdrError::StompingTextSectionNotFound)?;
 
@@ -416,7 +416,7 @@ impl CoffSymbol {
         coff: &Coff,
         stomping: bool,
         base_addr: Option<*mut c_void>,
-    ) -> CoffResult<(BTreeMap<String, usize>, Self)> {
+    ) -> Result<(BTreeMap<String, usize>, Self)> {
         // Resolves the symbols of the coff file
         let symbols = Self::process_symbols(coff)?;
         
@@ -455,7 +455,7 @@ impl CoffSymbol {
     /// # Returns
     ///
     /// A map of symbol names to their resolved addresses.
-    fn process_symbols(coff: &Coff) -> CoffResult<BTreeMap<String, usize>> {
+    fn process_symbols(coff: &Coff) -> Result<BTreeMap<String, usize>> {
         let mut functions = BTreeMap::new();
 
         for symbol in &coff.symbols {
@@ -483,7 +483,7 @@ impl CoffSymbol {
     /// # Returns
     ///
     /// The resolved address of the symbol.
-    fn resolve_symbol_address(name: &str, coff: &Coff) -> CoffResult<usize> {
+    fn resolve_symbol_address(name: &str, coff: &Coff) -> Result<usize> {
         debug!("Attempting to resolve address for symbol: {}", name);
         let prefix = match coff.arch {
             CoffMachine::X64 => "__imp_",
@@ -599,7 +599,7 @@ impl SectionMap {
     }
 
     /// Set the memory permissions for each section loaded.
-    fn adjust_permissions(&mut self) -> CoffResult<()> {
+    fn adjust_permissions(&mut self) -> Result<()> {
         info!(
             "Adjusting memory permissions for section: Name = {}, Address = {:?}, Size = {}, Characteristics = 0x{:X}",
             self.name, self.base, self.size, self.characteristics
@@ -666,7 +666,7 @@ impl<'a> CoffRelocation<'a> {
         &self,
         functions: &BTreeMap<String, usize>,
         symbols: &CoffSymbol
-    ) -> CoffResult<()> {
+    ) -> Result<()> {
         let mut index = 0;
         for (i, section) in self.coff.sections.iter().enumerate() {
             // Retrieve relocation entries for the current section.
@@ -723,7 +723,7 @@ impl<'a> CoffRelocation<'a> {
         symbols: *mut *mut c_void, 
         relocation: &IMAGE_RELOCATION, 
         symbol: &IMAGE_SYMBOL
-    ) -> CoffResult<()> {
+    ) -> Result<()> {
         debug!(
             "Processing relocation: Type = {}, Symbol Type = {}, StorageClass = {}, Section Number: {}", 
             relocation.Type, symbol.Type, symbol.StorageClass, symbol.SectionNumber

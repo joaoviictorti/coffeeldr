@@ -1,7 +1,8 @@
 use alloc::string::String;
 use thiserror::Error;
 
-pub type CoffResult<T> = core::result::Result<T, crate::error::CoffeeLdrError>;
+/// Result alias for COFF-related operations.
+pub type Result<T> = core::result::Result<T, crate::error::CoffeeLdrError>;
 
 /// Represents errors that can occur during the loading and 
 /// handling of COFF (Common Object File Format) files.

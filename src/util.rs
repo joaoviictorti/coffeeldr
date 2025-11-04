@@ -16,7 +16,7 @@ use windows_sys::Win32::{
     },
 };
 
-use super::error::{CoffeeLdrError, CoffResult};
+use super::error::{CoffeeLdrError, Result};
 
 /// Reads the entire contents of a file into memory using the Windows API.
 ///
@@ -27,7 +27,7 @@ use super::error::{CoffeeLdrError, CoffResult};
 /// # Returns
 ///
 /// Containing the file's contents if the operation succeeds.
-pub fn read_file(name: &str) -> CoffResult<Vec<u8>> {
+pub fn read_file(name: &str) -> Result<Vec<u8>> {
     let file_name = CString::new(name)
         .map_err(|_| CoffeeLdrError::Msg(s!("Invalid cstring")))?;
     let h_file = unsafe {
