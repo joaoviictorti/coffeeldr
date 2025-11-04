@@ -1,12 +1,16 @@
 use alloc::string::String;
 use thiserror::Error;
 
-pub(crate) type CoffResult<T> = core::result::Result<T, crate::error::CoffeeLdrError>;
+pub type CoffResult<T> = core::result::Result<T, crate::error::CoffeeLdrError>;
 
 /// Represents errors that can occur during the loading and 
 /// handling of COFF (Common Object File Format) files.
 #[derive(Debug, Error)]
 pub enum CoffeeLdrError {
+    /// Raised when an unspecified error occurs, useful for simple context-specific failures.
+    #[error("{0}")]
+    Msg(String),
+
     /// Occurs when memory allocation fails.
     #[error("Memory allocation error: code {0}")]
     MemoryAllocationError(u32),
@@ -50,10 +54,6 @@ pub enum CoffeeLdrError {
     /// Raised when the COFF file contains more symbols than allowed.
     #[error("Too many symbols in the COFF file. Maximum allowed is {0}.")]
     TooManySymbols(usize),
-
-    /// Raised when an unspecified error occurs, useful for simple context-specific failures.
-    #[error("{0}")]
-    GenericError(String),
 
     /// Raised when a symbol cannot be parsed correctly.
     #[error("Failed to parse symbol: '{0}'")]

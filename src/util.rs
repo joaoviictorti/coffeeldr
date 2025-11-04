@@ -29,7 +29,7 @@ use super::error::{CoffeeLdrError, CoffResult};
 /// Containing the file's contents if the operation succeeds.
 pub fn read_file(name: &str) -> CoffResult<Vec<u8>> {
     let file_name = CString::new(name)
-        .map_err(|_| CoffeeLdrError::GenericError(s!("Invalid cstring")))?;
+        .map_err(|_| CoffeeLdrError::Msg(s!("Invalid cstring")))?;
     let h_file = unsafe {
         CreateFileA(
             file_name.as_ptr().cast(),
@@ -43,12 +43,12 @@ pub fn read_file(name: &str) -> CoffResult<Vec<u8>> {
     };
 
     if h_file == INVALID_HANDLE_VALUE {
-        return Err(CoffeeLdrError::GenericError(s!("Failed to open file")));
+        return Err(CoffeeLdrError::Msg(s!("failed to open file")));
     }
 
     let size = unsafe { GetFileSize(h_file, null_mut()) };
     if size == INVALID_FILE_SIZE {
-        return Err(CoffeeLdrError::GenericError(s!("Invalid file size")));
+        return Err(CoffeeLdrError::Msg(s!("invalid file size")));
     }
 
     let mut out = vec![0u8; size as usize];
