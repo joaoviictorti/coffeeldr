@@ -816,7 +816,7 @@ impl<'a> CoffRelocation<'a> {
 }
 
 #[inline]
-pub fn NtFreeVirtualMemory(
+fn NtFreeVirtualMemory(
     process_handle: *mut c_void, 
     base_address: *mut *mut c_void, 
     region_size: *mut usize, 
@@ -839,7 +839,7 @@ pub fn NtFreeVirtualMemory(
 }
 
 #[inline]
-pub fn LoadLibraryExA(
+fn LoadLibraryExA(
     lp_lib_file_name: *const u8, 
     h_file: *mut c_void, 
     dw_flags: u32
