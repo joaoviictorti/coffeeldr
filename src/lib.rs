@@ -15,7 +15,6 @@ mod beacon;
 mod error;
 mod util;
 mod loader;
-mod ffi;
 mod beacon_pack;
 
 pub mod coff;

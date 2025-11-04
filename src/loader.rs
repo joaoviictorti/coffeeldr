@@ -20,7 +20,17 @@ use core::{
 };
 
 use obfstr::obfstr as s;
-use dinvk::{pe::PE, *};
+use dinvk::{dinvoke, pe::PE, data::NTSTATUS};
+use dinvk::{
+    NT_SUCCESS,
+    NtProtectVirtualMemory,
+    NtAllocateVirtualMemory,
+    NtCurrentProcess,
+    GetProcAddress,
+    LoadLibraryA,
+    GetModuleHandle,
+    get_ntdll_address
+};
 use windows_sys::Win32::{
     Foundation::{GetLastError, STATUS_SUCCESS},
     System::{
@@ -37,10 +47,6 @@ use super::error::{
     CoffError, 
     CoffeeLdrError, 
     CoffResult
-};
-use super::ffi::{
-    LoadLibraryExA, 
-    NtFreeVirtualMemory
 };
 use super::coff::{
     Coff,
@@ -215,7 +221,7 @@ impl<'a> CoffeeLdr<'a> {
 
         // Process relocations to correctly adjust symbol addresses based on memory layout.
         let reloc = CoffRelocation::new(&self.coff, &self.section_map);
-        reloc.apply(&functions, &self.symbols)?;
+        reloc.apply_relocations(&functions, &self.symbols)?;
 
         // Adjust memory permissions for allocated sections.
         self.section_map
@@ -273,7 +279,7 @@ struct CoffMemory<'a> {
 }
 
 impl<'a> CoffMemory<'a> {
-    /// Creates a new [`CoffMemory`] instance.
+    /// Creates a new `CoffMemory`.
     pub fn new(coff: &'a Coff<'a>, stomping: bool, module: &'a str) -> Self {
         Self {
             coff,
@@ -282,7 +288,7 @@ impl<'a> CoffMemory<'a> {
         }
     }
 
-    /// Allocates memory for COFF sections. Uses either module stomping or fresh memory.
+    /// Allocates memory for COFF sections.
     pub fn alloc(&self) -> CoffResult<(Vec<SectionMap>, Option<*mut c_void>)> {
         if self.stomping {
             self.alloc_with_stomping()
@@ -292,9 +298,6 @@ impl<'a> CoffMemory<'a> {
     }
 
     /// Allocates new virtual memory for loading the sections of the COFF file.
-    ///
-    /// This method reserves and commits a memory region for the BOF (Beacon Object File)
-    /// using `NtAllocateVirtualMemory`. The memory is writable and top-down allocated.
     ///
     /// # Returns
     ///
@@ -397,196 +400,6 @@ impl<'a> CoffMemory<'a> {
     }
 }
 
-/// Handles relocation of symbols for COFF sections.
-struct CoffRelocation<'a> {   
-    /// Reference to the parsed COFF object containing sections and symbols.
-    coff: &'a Coff<'a>,
-
-    /// List of mapped sections in memory, used to compute relocation targets.
-    section_map: &'a [SectionMap],
-}
-
-impl<'a> CoffRelocation<'a> {
-    /// Creates a new [`CoffRelocation`] instance.
-    pub fn new(coff: &'a Coff, section_map: &'a [SectionMap]) -> Self {
-        Self { coff, section_map }
-    }
-
-    /// Applies relocations to all sections in the COFF file.
-    ///
-    /// # Arguments
-    /// 
-    /// * `functions` - Map of resolved symbol names to their function addresses.
-    /// * `symbols` - Pointer to the symbol table in memory.
-    ///
-    /// # Returns
-    /// 
-    /// On success.
-    pub fn apply(
-        &self,
-        functions: &BTreeMap<String, usize>,
-        symbols: &CoffSymbol
-    ) -> CoffResult<()> {
-        let mut index = 0;
-        for (i, section) in self.coff.sections.iter().enumerate() {
-            // Retrieve relocation entries for the current section.
-            let relocations = self.coff.get_relocations(section);
-            for relocation in relocations.iter() {
-                // Look up the symbol associated with the relocation.
-                let symbol = &self.coff.symbols[relocation.SymbolTableIndex as usize];
-
-                // Compute the address where the relocation should be applied.
-                let symbol_reloc_addr = (self.section_map[i].base as usize 
-                    + unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
-
-                // Retrieve the symbol's name (used for function lookups).
-                let name = self.coff.get_symbol_name(symbol);
-                if let Some(function_address) = functions.get(&name).map(|&addr| addr as *mut c_void) {
-                    unsafe {
-                        symbols
-                            .address
-                            .add(index)
-                            .write_volatile(function_address);
-
-                        // Apply the relocation using the resolved function address.
-                        self.process(
-                            symbol_reloc_addr, 
-                            function_address, 
-                            symbols.address.add(index), 
-                            relocation, 
-                            symbol
-                        )?;
-                    };
-
-                    index += 1;
-                } else {
-                    // Apply the relocation but without a resolved function address (null pointer).
-                    self.process(
-                        symbol_reloc_addr, 
-                        null_mut(), 
-                        null_mut(), 
-                        relocation, 
-                        symbol
-                    )?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Processes the relocation of symbols in a COFF (Common Object File Format) file.
-    ///
-    /// # Arguments
-    ///
-    /// * `reloc_addr` - A pointer to the location in memory where the relocation will be applied.
-    /// * `function_address` - The address of the function or symbol being relocated, or `null` if not applicable.
-    /// * `symbols` - A pointer to the function map, used when resolving external symbols.
-    /// * `relocation` - A reference to the `IMAGE_RELOCATION` struct, which contains the relocation entry details.
-    /// * `symbol` - A reference to the `IMAGE_SYMBOL` struct, representing the symbol being relocated.
-    ///
-    /// # Returns
-    ///
-    /// If the relocation was successfully processed.
-    fn process(
-        &self, 
-        reloc_addr: *mut c_void, 
-        function_address: *mut c_void, 
-        symbols: *mut *mut c_void, 
-        relocation: &IMAGE_RELOCATION, 
-        symbol: &IMAGE_SYMBOL
-    ) -> CoffResult<()> {
-        debug!(
-            "Processing relocation: Type = {}, Symbol Type = {}, StorageClass = {}, Section Number: {}", 
-            relocation.Type, symbol.Type, symbol.StorageClass, symbol.SectionNumber
-        );
-
-        unsafe {
-            if symbol.StorageClass == IMAGE_SYM_CLASS_EXTERNAL as u8 && symbol.SectionNumber == 0 {
-                match self.coff.arch {
-                    CoffMachine::X64 =>  {
-                        if relocation.Type as u32 == IMAGE_REL_AMD64_REL32 && !function_address.is_null() {
-                            let relative_address = (symbols as usize)
-                                .wrapping_sub(reloc_addr as usize)
-                                .wrapping_sub(size_of::<u32>());
-
-                            write_unaligned(reloc_addr as *mut u32, relative_address as u32);
-                            return Ok(())
-                        }
-                    },
-                    CoffMachine::X32 => {
-                        if relocation.Type as u32 == IMAGE_REL_I386_DIR32 && !function_address.is_null() {
-                            write_unaligned(reloc_addr as *mut u32, symbols as u32);
-                            return Ok(())
-                        }
-                    }
-                }
-            }
-
-            let section_addr = self.section_map[(symbol.SectionNumber - 1) as usize].base;
-            match self.coff.arch {
-                CoffMachine::X64 => {
-                    match relocation.Type as u32 {
-                        IMAGE_REL_AMD64_ADDR32NB if function_address.is_null() => {
-                            write_unaligned(
-                                reloc_addr as *mut u32,
-                                read_unaligned(reloc_addr as *mut u32)
-                                    .wrapping_add((section_addr as usize)
-                                        .wrapping_sub(reloc_addr as usize)
-                                        .wrapping_sub(size_of::<u32>()) as u32
-                                ),
-                            );
-                        },
-                        IMAGE_REL_AMD64_ADDR64 if function_address.is_null() => {
-                            write_unaligned(
-                                reloc_addr as *mut u64,
-                                read_unaligned(reloc_addr as *mut u64)
-                                    .wrapping_add(section_addr as u64),
-                            );
-                        },
-                        r @ IMAGE_REL_AMD64_REL32..=IMAGE_REL_AMD64_REL32_5 => {
-                            write_unaligned(
-                                reloc_addr as *mut u32,
-                                read_unaligned(reloc_addr as *mut u32)
-                                    .wrapping_add((section_addr as usize)
-                                        .wrapping_sub(reloc_addr as usize)
-                                        .wrapping_sub(size_of::<u32>())
-                                        .wrapping_sub((r - 4) as usize) as u32
-                                    ),
-                            );
-                        },
-                        _ => return Err(CoffeeLdrError::InvalidRelocationType(relocation.Type))
-                    }
-                },
-                CoffMachine::X32 => {
-                    match relocation.Type as u32 {
-                        IMAGE_REL_I386_REL32 if function_address.is_null() => {
-                            write_unaligned(
-                                reloc_addr as *mut u32,
-                                read_unaligned(reloc_addr as *mut u32)
-                                    .wrapping_add((section_addr as usize)
-                                    .wrapping_sub(reloc_addr as usize)
-                                    .wrapping_sub(size_of::<u32>()) as u32
-                                )
-                            );
-                        },
-                        IMAGE_REL_I386_DIR32 if function_address.is_null() => {
-                            write_unaligned(
-                                reloc_addr as *mut u32,
-                                read_unaligned(reloc_addr as *mut u32)
-                                    .wrapping_add(section_addr as u32)
-                            );
-                        },
-                        _ => return Err(CoffeeLdrError::InvalidRelocationType(relocation.Type))
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
 /// Maximum number of symbols that the function map can handle.
 const MAX_SYMBOLS: usize = 600;
 
@@ -598,7 +411,7 @@ struct CoffSymbol {
 }
 
 impl CoffSymbol {
-    /// Creates a new [`CoffSymbol`] instance.
+    /// Creates a new `CoffSymbol`.
     pub fn new(
         coff: &Coff,
         stomping: bool,
@@ -831,4 +644,217 @@ impl SectionMap {
 
         Ok(())
     }
+}
+
+/// Handles relocation of symbols for COFF sections.
+struct CoffRelocation<'a> {   
+    /// Reference to the parsed COFF object containing sections and symbols.
+    coff: &'a Coff<'a>,
+
+    /// List of mapped sections in memory, used to compute relocation targets.
+    section_map: &'a [SectionMap],
+}
+
+impl<'a> CoffRelocation<'a> {
+    /// Creates a new `CoffRelocation`.
+    pub fn new(coff: &'a Coff, section_map: &'a [SectionMap]) -> Self {
+        Self { coff, section_map }
+    }
+
+    /// Applies relocations to all sections in the COFF file.
+    pub fn apply_relocations(
+        &self,
+        functions: &BTreeMap<String, usize>,
+        symbols: &CoffSymbol
+    ) -> CoffResult<()> {
+        let mut index = 0;
+        for (i, section) in self.coff.sections.iter().enumerate() {
+            // Retrieve relocation entries for the current section.
+            let relocations = self.coff.get_relocations(section);
+            for relocation in relocations.iter() {
+                // Look up the symbol associated with the relocation.
+                let symbol = &self.coff.symbols[relocation.SymbolTableIndex as usize];
+
+                // Compute the address where the relocation should be applied.
+                let symbol_reloc_addr = (self.section_map[i].base as usize 
+                    + unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
+
+                // Retrieve the symbol's name (used for function lookups).
+                let name = self.coff.get_symbol_name(symbol);
+                if let Some(function_address) = functions.get(&name).map(|&addr| addr as *mut c_void) {
+                    unsafe {
+                        symbols
+                            .address
+                            .add(index)
+                            .write_volatile(function_address);
+
+                        // Apply the relocation using the resolved function address.
+                        self.process_relocations(
+                            symbol_reloc_addr, 
+                            function_address, 
+                            symbols.address.add(index), 
+                            relocation, 
+                            symbol
+                        )?;
+                    };
+
+                    index += 1;
+                } else {
+                    // Apply the relocation but without a resolved function address (null pointer).
+                    self.process_relocations(
+                        symbol_reloc_addr, 
+                        null_mut(), 
+                        null_mut(), 
+                        relocation, 
+                        symbol
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Processes the relocation of symbols in a COFF (Common Object File Format) file.
+    fn process_relocations(
+        &self, 
+        reloc_addr: *mut c_void, 
+        function_address: *mut c_void, 
+        symbols: *mut *mut c_void, 
+        relocation: &IMAGE_RELOCATION, 
+        symbol: &IMAGE_SYMBOL
+    ) -> CoffResult<()> {
+        debug!(
+            "Processing relocation: Type = {}, Symbol Type = {}, StorageClass = {}, Section Number: {}", 
+            relocation.Type, symbol.Type, symbol.StorageClass, symbol.SectionNumber
+        );
+
+        unsafe {
+            if symbol.StorageClass == IMAGE_SYM_CLASS_EXTERNAL as u8 && symbol.SectionNumber == 0 {
+                match self.coff.arch {
+                    CoffMachine::X64 =>  {
+                        if relocation.Type as u32 == IMAGE_REL_AMD64_REL32 && !function_address.is_null() {
+                            let relative_address = (symbols as usize)
+                                .wrapping_sub(reloc_addr as usize)
+                                .wrapping_sub(size_of::<u32>());
+
+                            write_unaligned(reloc_addr as *mut u32, relative_address as u32);
+                            return Ok(())
+                        }
+                    },
+                    CoffMachine::X32 => {
+                        if relocation.Type as u32 == IMAGE_REL_I386_DIR32 && !function_address.is_null() {
+                            write_unaligned(reloc_addr as *mut u32, symbols as u32);
+                            return Ok(())
+                        }
+                    }
+                }
+            }
+
+            let section_addr = self.section_map[(symbol.SectionNumber - 1) as usize].base;
+            match self.coff.arch {
+                CoffMachine::X64 => {
+                    match relocation.Type as u32 {
+                        IMAGE_REL_AMD64_ADDR32NB if function_address.is_null() => {
+                            write_unaligned(
+                                reloc_addr as *mut u32,
+                                read_unaligned(reloc_addr as *mut u32)
+                                    .wrapping_add((section_addr as usize)
+                                        .wrapping_sub(reloc_addr as usize)
+                                        .wrapping_sub(size_of::<u32>()) as u32
+                                ),
+                            );
+                        },
+                        IMAGE_REL_AMD64_ADDR64 if function_address.is_null() => {
+                            write_unaligned(
+                                reloc_addr as *mut u64,
+                                read_unaligned(reloc_addr as *mut u64)
+                                    .wrapping_add(section_addr as u64),
+                            );
+                        },
+                        r @ IMAGE_REL_AMD64_REL32..=IMAGE_REL_AMD64_REL32_5 => {
+                            write_unaligned(
+                                reloc_addr as *mut u32,
+                                read_unaligned(reloc_addr as *mut u32)
+                                    .wrapping_add((section_addr as usize)
+                                        .wrapping_sub(reloc_addr as usize)
+                                        .wrapping_sub(size_of::<u32>())
+                                        .wrapping_sub((r - 4) as usize) as u32
+                                    ),
+                            );
+                        },
+                        _ => return Err(CoffeeLdrError::InvalidRelocationType(relocation.Type))
+                    }
+                },
+                CoffMachine::X32 => {
+                    match relocation.Type as u32 {
+                        IMAGE_REL_I386_REL32 if function_address.is_null() => {
+                            write_unaligned(
+                                reloc_addr as *mut u32,
+                                read_unaligned(reloc_addr as *mut u32)
+                                    .wrapping_add((section_addr as usize)
+                                    .wrapping_sub(reloc_addr as usize)
+                                    .wrapping_sub(size_of::<u32>()) as u32
+                                )
+                            );
+                        },
+                        IMAGE_REL_I386_DIR32 if function_address.is_null() => {
+                            write_unaligned(
+                                reloc_addr as *mut u32,
+                                read_unaligned(reloc_addr as *mut u32)
+                                    .wrapping_add(section_addr as u32)
+                            );
+                        },
+                        _ => return Err(CoffeeLdrError::InvalidRelocationType(relocation.Type))
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[inline]
+pub fn NtFreeVirtualMemory(
+    process_handle: *mut c_void, 
+    base_address: *mut *mut c_void, 
+    region_size: *mut usize, 
+    free_type: u32
+) {
+    dinvoke!(
+        get_ntdll_address(),
+        s!("NtFreeVirtualMemory"),
+        unsafe extern "system" fn(
+            process_handle: *mut c_void,
+            base_address: *mut *mut c_void,
+            region_size: *mut usize,
+            free_type: u32,
+        ) -> NTSTATUS,
+        process_handle,
+        base_address,
+        region_size,
+        free_type
+    );
+}
+
+#[inline]
+pub fn LoadLibraryExA(
+    lp_lib_file_name: *const u8, 
+    h_file: *mut c_void, 
+    dw_flags: u32
+) -> Option<*mut c_void> {
+    let kernel32 = GetModuleHandle(2808682670u32, Some(dinvk::hash::murmur3));
+    dinvoke!(
+        kernel32,
+        s!("LoadLibraryExA"),
+        unsafe extern "system" fn(
+            lp_lib_file_name: *const u8,
+            h_file: *mut c_void,
+            dw_flags: u32,
+        ) -> *mut c_void,
+        lp_lib_file_name,
+        h_file,
+        dw_flags
+    )
 }
