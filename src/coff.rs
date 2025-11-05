@@ -1,13 +1,16 @@
+// Copyright (c) 2025 joaoviictorti
+// Licensed under the MIT License. See LICENSE file in the project root for details.
+
+use core::ffi::{CStr, c_void};
 use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
 
-use core::ffi::{CStr, c_void};
+use log::{debug, warn};
 use binrw::{BinRead, binread};
 use binrw::io::Cursor;
 
-use super::{debug, warn};
 use super::error::{
     CoffError,
     CoffeeLdrError

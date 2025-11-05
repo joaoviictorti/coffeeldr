@@ -1,8 +1,11 @@
+// Copyright (c) 2025 joaoviictorti
+// Licensed under the MIT License. See LICENSE file in the project root for details.
+
 use alloc::string::String;
 use thiserror::Error;
 
 /// Result alias for COFF-related operations.
-pub type Result<T> = core::result::Result<T, crate::error::CoffeeLdrError>;
+pub type Result<T> = core::result::Result<T, CoffeeLdrError>;
 
 /// Represents errors that can occur during the loading and 
 /// handling of COFF (Common Object File Format) files.
@@ -11,6 +14,17 @@ pub enum CoffeeLdrError {
     /// Raised when an unspecified error occurs, useful for simple context-specific failures.
     #[error("{0}")]
     Msg(String),
+
+    /// Binary encoding or decoding failure.
+    #[error("binary serialization error: {0}")]
+    Binrw(binrw::Error),
+
+    #[error("Hex error: {0}")]
+    Hex(hex::FromHexError),
+
+    /// Propagates errors from the`CoffError`.
+    #[error("coff error: {0}")]
+    CoffError(#[from] CoffError),
 
     /// Occurs when memory allocation fails.
     #[error("Memory allocation error: code {0}")]
@@ -43,10 +57,6 @@ pub enum CoffeeLdrError {
     /// Raised when the COFF file cannot be parsed correctly.
     #[error("Error loading COFF file.")]
     ParsingError,
-
-    /// Propagates errors from the `CoffError` type, which represent issues specifically with COFF file handling.
-    #[error("{0}")]
-    CoffError(#[from] CoffError),
 
     /// Raised when there is a mismatch between the expected and actual system architecture.
     #[error("Unsupported architecture. File expects {expected}, but current system is {actual}.")]
@@ -113,23 +123,14 @@ pub enum CoffError {
     SectionLimitExceeded,
 }
 
-#[derive(Debug, Error)]
-pub enum BeaconPackError {
-    #[error("Hex error: {0}")]
-    Hex(hex::FromHexError),
-
-    #[error("IO error: {0}")]
-    Io(binrw::io::Error),
-}
-
-impl From<hex::FromHexError> for BeaconPackError {
-    fn from(e: hex::FromHexError) -> Self {
-        Self::Hex(e)
+impl From<hex::FromHexError> for CoffeeLdrError {
+    fn from(err: hex::FromHexError) -> Self {
+        CoffeeLdrError::Hex(err)
     }
 }
 
-impl From<binrw::io::Error> for BeaconPackError {
-    fn from(e: binrw::io::Error) -> Self {
-        Self::Io(e)
+impl From<binrw::io::Error> for CoffeeLdrError {
+    fn from(err: binrw::io::Error) -> Self {
+        CoffeeLdrError::Binrw(binrw::Error::Io(err))
     }
 }

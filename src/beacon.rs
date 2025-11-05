@@ -1,3 +1,6 @@
+// Copyright (c) 2025 joaoviictorti
+// Licensed under the MIT License. See LICENSE file in the project root for details.
+
 use alloc::{
     string::{String, ToString},
     vec::Vec,
@@ -548,7 +551,7 @@ unsafe extern "C" fn BeaconPrintf(_type: c_int, fmt: *mut c_char, mut args: ...)
 fn BeaconRevertToken() {
     unsafe {
         if RevertToSelf() == 0 {
-            super::warn!("RevertToSelf Failed!")
+            log::warn!("RevertToSelf Failed!")
         }
     }
 }

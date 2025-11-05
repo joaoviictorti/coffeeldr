@@ -1,3 +1,6 @@
+// Copyright (c) 2025 joaoviictorti
+// Licensed under the MIT License. See LICENSE file in the project root for details.
+
 use core::ptr::null_mut;
 use alloc::{
     ffi::CString, 
@@ -16,7 +19,10 @@ use windows_sys::Win32::{
     },
 };
 
-use super::error::{CoffeeLdrError, Result};
+use super::error::{
+    CoffeeLdrError, 
+    Result
+};
 
 /// Reads the entire contents of a file into memory using the Windows API.
 ///
@@ -64,40 +70,4 @@ pub fn read_file(name: &str) -> Result<Vec<u8>> {
     }
 
     Ok(out)
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! debug {
-    ($($arg:tt)*) => {{
-        let _ = format_args!($($arg)*);
-        #[cfg(debug_assertions)]
-        {
-            log::debug!($($arg)*);
-        }
-    }};
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! info {
-    ($($arg:tt)*) => {{
-        let _ = format_args!($($arg)*);
-        #[cfg(debug_assertions)]
-        {
-            log::info!($($arg)*);
-        }
-    }};
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! warn {
-    ($($arg:tt)*) => {{
-        let _ = format_args!($($arg)*);
-        #[cfg(debug_assertions)]
-        {
-            log::warn!($($arg)*);
-        }
-    }};
 }

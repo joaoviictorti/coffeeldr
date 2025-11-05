@@ -1,3 +1,6 @@
+// Copyright (c) 2025 joaoviictorti
+// Licensed under the MIT License. See LICENSE file in the project root for details.
+
 use alloc::{
     boxed::Box,
     collections::BTreeMap,
@@ -19,17 +22,14 @@ use core::{
     },
 };
 
+use log::{debug, info, warn};
 use obfstr::obfstr as s;
 use dinvk::{dinvoke, pe::PE, data::NTSTATUS};
 use dinvk::{
-    NT_SUCCESS,
-    NtProtectVirtualMemory,
-    NtAllocateVirtualMemory,
-    NtCurrentProcess,
-    GetProcAddress,
-    LoadLibraryA,
-    GetModuleHandle,
-    get_ntdll_address
+    NT_SUCCESS, NtProtectVirtualMemory,
+    NtAllocateVirtualMemory, NtCurrentProcess,
+    GetProcAddress, LoadLibraryA,
+    GetModuleHandle, get_ntdll_address
 };
 use windows_sys::Win32::{
     Foundation::{GetLastError, STATUS_SUCCESS},
@@ -42,16 +42,15 @@ use windows_sys::Win32::{
 };
 
 use super::util::read_file;
-use super::{debug, info, warn};
 use super::error::{
     CoffError, 
     CoffeeLdrError, 
     Result
 };
 use super::coff::{
-    Coff,
+    Coff, 
     CoffMachine,
-    CoffSource,
+    CoffSource, 
     IMAGE_RELOCATION,
     IMAGE_SYMBOL
 };
