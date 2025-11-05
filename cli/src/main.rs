@@ -1,11 +1,14 @@
-use log::{info, error};
+use clap_verbosity_flag::Verbosity;
+use log::{error, info};
 use clap::Parser;
 use base64::{engine::general_purpose, Engine as _};
 use coffeeldr::{BeaconPack, CoffeeLdr};
 
+mod logging;
+
 /// The main command-line interface struct.
 #[derive(Parser)]
-#[clap(author="joaoviictorti", about="A COFF (Common Object File Format) loader written in Rust")]
+#[clap(author="joaoviictorti", about="A COFF loader written in Rust")]
 pub struct Cli {
     /// The command to be executed.
     #[arg(short, long, required = true)]
@@ -23,10 +26,8 @@ pub struct Cli {
     #[arg(long)]
     pub stomping: Option<String>,
 
-    /// Verbose mode (-v, -vv, -vvv, etc.)
-    #[cfg(debug_assertions)]
-    #[arg(short, long, action = clap::ArgAction::Count)]
-    pub verbose: u8,
+    #[command(flatten)]
+    pub verbose: Verbosity,
 }
 
 /// Function to set the default entrypoint value based on the architecture.
@@ -87,34 +88,18 @@ fn process_input(input: &str, pack: &mut BeaconPack) -> Result<(), String> {
     Ok(())
 }
 
-/// Initializes the logger based on the verbosity level (-v, -vv, -vvv)
-#[cfg(debug_assertions)]
-fn init_logger(verbose: u8) {
-    // Maps the number of "v"s to the corresponding log level
-    let log_level = match verbose {
-        0 => "error",
-        1 => "warn",
-        2 => "info",
-        3 => "debug",
-        _ => "trace",
-    };
-
-    // Initialize the logger with the configured log level
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level))
-        .init();
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Cli::parse();
-    
-    #[cfg(debug_assertions)]
-    init_logger(args.verbose);
+    // Parse CLI arguments
+    let cli = Cli::parse();
+
+    // Initializes global logger
+    logging::init_logger(&cli.verbose);
 
     // Initialize the buffer
     let mut pack = BeaconPack::default();
 
     // Process inputs if provided
-    if let Some(inputs) = &args.inputs {
+    if let Some(inputs) = &cli.inputs {
         for input in inputs {
             process_input(input, &mut pack)
                 .map_err(|e| error!("{e}"))
@@ -125,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Prepare buffer and length if inputs were provided
-    let vec_buffer = if args.inputs.is_some() {
+    let vec_buffer = if cli.inputs.is_some() {
         // Get the buffer from the pack
         Some(pack.get_buffer_hex()?)
     } else {
@@ -141,15 +126,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Run CoffeeLdr
-    let mut coffee = CoffeeLdr::new(args.bof.as_str())?;
-    coffee = if let Some(ref module_name) = args.stomping {
+    let mut coffee = CoffeeLdr::new(cli.bof.as_str())?;
+    coffee = if let Some(ref module_name) = cli.stomping {
         info!("Module stomping enabled: {}", module_name);
         coffee.with_module_stomping(module_name)
     } else {
         coffee
     };
 
-    match coffee.run(&args.entrypoint, buffer, len) {
+    match coffee.run(&cli.entrypoint, buffer, len) {
         Ok(result) => print!("Output:\n {result}"),
         Err(err_code) => error!("{:?}", err_code),
     }
