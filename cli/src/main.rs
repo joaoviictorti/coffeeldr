@@ -18,7 +18,7 @@ pub struct Cli {
     #[arg(short, long, default_value_t = default_entrypoint())]
     pub entrypoint: String,
 
-    /// Multiple arguments in the format `/short:<value>`, `/int:<value>`, `/str:<value>`, `/wstr:<value>`, `/bin:<base64-data>`
+    /// Multiple arguments in the format `/short:<value>`, `/int:<value>`, `/str:<value>`, `/wstr:<value>`, `/bin:<base64-data>`, `/bin_path:<bin-file-path>`
     #[arg(value_parser)]
     pub inputs: Option<Vec<String>>,
 
@@ -81,6 +81,19 @@ fn process_input(input: &str, pack: &mut BeaconPack) -> Result<(), String> {
             Err(e) => return Err(format!("Error decoding Base64: {e}")),
         }
 
+    } else if input.starts_with("/bin_path:") {
+        let file_path = &input[10..];
+        let file_fd = std::path::Path::new(file_path);
+        if !file_fd.exists() {
+            return Err(format!("File not found: {}", file_path));
+        }
+        match std::fs::read(file_fd) {
+            Ok(file_data) => {
+                pack.addbin(&file_data).map_err(|e| format!("Error adding bin: {e}"))?;
+                info!("Added binary file: {}", file_path);
+            },
+            Err(e) => return Err(format!("Error reading file '{}': {e}", file_path)),
+        }
     } else {
         return Err(format!("Invalid input format: {input}"));
     }
