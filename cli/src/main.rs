@@ -91,7 +91,7 @@ fn process_input(input: &str, pack: &mut BeaconPack) -> Result<(), String> {
             Ok(file_data) => {
                 pack.addbin(&file_data).map_err(|e| format!("Error adding bin: {e}"))?;
                 info!("Added binary file: {}", file_path);
-            }，
+            },
             Err(e) => return Err(format!("Error reading file '{}': {e}", file_path)),
         }
     } else {
