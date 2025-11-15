@@ -143,41 +143,42 @@ struct Format {
 pub fn get_function_internal_address(name: &str) -> Result<usize> {
     match jenkins3(name) {
         // Output
-        3210322847u32 => Ok(BeaconPrintf as usize),
-        358755801u32 => Ok(BeaconOutput as usize),
-        2979319955u32 => Ok(BeaconGetOutputData as usize),
+        3210322847u32 => Ok(BeaconPrintf as *const () as usize),
+        358755801u32 => Ok(BeaconOutput as *const () as usize),
+        2979319955u32 => Ok(BeaconGetOutputData as *const () as usize),
 
         // Token
-        3202664826u32 => Ok(BeaconIsAdmin as usize),
-        233171701u32 => Ok(BeaconUseToken as usize),
-        2754379686u32 => Ok(BeaconRevertToken as usize),
+        3202664826u32 => Ok(BeaconIsAdmin as *const () as usize),
+        233171701u32 => Ok(BeaconUseToken as *const () as usize),
+        2754379686u32 => Ok(BeaconRevertToken as *const () as usize),
 
         // Format
-        1870274128u32 => Ok(BeaconFormatInt as usize),
-        1617256401u32 => Ok(BeaconFormatFree as usize),
-        687949845u32 => Ok(BeaconFormatAlloc as usize),
-        305071883u32 => Ok(BeaconFormatReset as usize),
-        2824797381u32 => Ok(BeaconFormatPrintf as usize),
-        814630661u32 => Ok(BeaconFormatAppend as usize),
-        2821454172u32 => Ok(BeaconFormatToString as usize),
+        1870274128u32 => Ok(BeaconFormatInt as *const () as usize),
+        1617256401u32 => Ok(BeaconFormatFree as *const () as usize),
+        687949845u32 => Ok(BeaconFormatAlloc as *const () as usize),
+        305071883u32 => Ok(BeaconFormatReset as *const () as usize),
+        2824797381u32 => Ok(BeaconFormatPrintf as *const () as usize),
+        814630661u32 => Ok(BeaconFormatAppend as *const () as usize),
+        2821454172u32 => Ok(BeaconFormatToString as *const () as usize),
 
-        // Process and injection-related operations
-        3748796315u32 => Ok(BeaconGetSpawnTo as usize),
-        1991785755u32 => Ok(BeaconInjectProcess as usize),
-        2335479872u32 => Ok(BeaconCleanupProcess as usize),
-        2755057638u32 => Ok(BeaconSpawnTemporaryProcess as usize),
-        131483084u32 => Ok(BeaconInjectTemporaryProcess as usize),
+        // Process / injection
+        3748796315u32 => Ok(BeaconGetSpawnTo as *const () as usize),
+        1991785755u32 => Ok(BeaconInjectProcess as *const () as usize),
+        2335479872u32 => Ok(BeaconCleanupProcess as *const () as usize),
+        2755057638u32 => Ok(BeaconSpawnTemporaryProcess as *const () as usize),
+        131483084u32 => Ok(BeaconInjectTemporaryProcess as *const () as usize),
 
         // Data
-        1942020652u32 => Ok(BeaconDataInt as usize),
-        1136370979u32 => Ok(BeaconDataShort as usize),
-        709123669u32 => Ok(BeaconDataParse as usize),
-        2194280572u32 => Ok(BeaconDataLength as usize),
-        596399976u32 => Ok(BeaconDataExtract as usize),
-        275872794u32 => Ok(BeaconDataPtr as usize),
+        1942020652u32 => Ok(BeaconDataInt as *const () as usize),
+        1136370979u32 => Ok(BeaconDataShort as *const () as usize),
+        709123669u32 => Ok(BeaconDataParse as *const () as usize),
+        2194280572u32 => Ok(BeaconDataLength as *const () as usize),
+        596399976u32 => Ok(BeaconDataExtract as *const () as usize),
+        275872794u32 => Ok(BeaconDataPtr as *const () as usize),
 
-        // Utility functions
-        2580203873u32 => Ok(toWideChar as usize),
+        // Utils
+        2580203873u32 => Ok(toWideChar as *const () as usize),
+
         3816160102u32 => Ok(0),
         _ => Err(CoffeeLdrError::FunctionInternalNotFound(name.to_string())),
     }
