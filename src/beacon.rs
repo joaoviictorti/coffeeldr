@@ -12,7 +12,7 @@ use core::{
 
 use spin::Mutex;
 use obfstr::obfstr as s;
-use dinvk::{NtCurrentProcess, syscall};
+use dinvk::{winapis::NtCurrentProcess, syscall};
 use dinvk::{data::OBJECT_ATTRIBUTES, hash::jenkins3};
 use windows_sys::Win32::{
     Security::*,

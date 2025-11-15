@@ -22,11 +22,15 @@ use core::{
 use log::{debug, info, warn};
 use obfstr::obfstr as s;
 use dinvk::{dinvoke, pe::PE, data::NTSTATUS};
-use dinvk::{
+use dinvk::module::{
+    get_proc_address, 
+    get_module_address, 
+    get_ntdll_address
+};
+use dinvk::winapis::{
     NT_SUCCESS, NtProtectVirtualMemory,
     NtAllocateVirtualMemory, NtCurrentProcess,
-    GetProcAddress, LoadLibraryA,
-    GetModuleHandle, get_ntdll_address
+    LoadLibraryA,
 };
 use windows_sys::Win32::{
     Foundation::{GetLastError, STATUS_SUCCESS},
@@ -407,7 +411,7 @@ impl<'a> CoffMemory<'a> {
         // Invoking LoadLibraryExA dynamically
         let target = format!("{}\0", self.module);
         let h_module = {
-            let handle = GetModuleHandle(self.module, None);
+            let handle = get_module_address(self.module, None);
             if handle.is_null() {
                 LoadLibraryExA(
                     target.as_ptr(),
@@ -563,7 +567,7 @@ impl CoffSymbol {
 
         debug!("Resolving Module {} and Function {}", dll, function);
         let module = {
-            let mut handle = GetModuleHandle(dll.to_string(), None);
+            let mut handle = get_module_address(dll.to_string(), None);
             if handle.is_null() {
                 handle = LoadLibraryA(dll);
                 if handle.is_null() {
@@ -576,7 +580,7 @@ impl CoffSymbol {
             }
         };
 
-        let addr = GetProcAddress(module, function, None);
+        let addr = get_proc_address(module, function, None);
         if addr.is_null() {
             Err(CoffeeLdrError::FunctionNotFound(symbol_name.to_string()))
         } else {
@@ -920,7 +924,7 @@ fn LoadLibraryExA(
     h_file: *mut c_void, 
     dw_flags: u32
 ) -> Option<*mut c_void> {
-    let kernel32 = GetModuleHandle(2808682670u32, Some(dinvk::hash::murmur3));
+    let kernel32 = get_module_address(2808682670u32, Some(dinvk::hash::murmur3));
     dinvoke!(
         kernel32,
         s!("LoadLibraryExA"),
