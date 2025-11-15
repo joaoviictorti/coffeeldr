@@ -146,4 +146,14 @@ I want to express my gratitude to these projects that inspired me to create `cof
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](https://github.com/joaoviictorti/coffeeldr/tree/main/LICENSE) file for details.
+coffeeldr is licensed under either of
+
+- Apache License, Version 2.0, ([LICENSE-APACHE](https://github.com/joaoviictorti/coffeeldr/tree/main/LICENSE-APACHE) or
+  <https://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](https://github.com/joaoviictorti/coffeeldr/tree/main/LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in coffeeldr
+by you, as defined in the Apache-2.0 license, shall be dually licensed as above, without any
+additional terms or conditions.

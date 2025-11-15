@@ -63,6 +63,39 @@ use super::beacon::{
 type CoffMain = extern "C" fn(*mut u8, usize);
 
 /// Represents a Rust interface to the COFF (Common Object File Format) files.
+/// 
+/// # Examples
+///
+/// ## Using a file as a source:
+///
+/// ```
+/// use coffeeldr::CoffeeLdr;
+///
+/// let mut loader = CoffeeLdr::new("whoami.o");
+/// match loader {
+///     Ok(ldr) => {
+///         println!("COFF successfully uploaded!");
+///         // Use `ldr` to execute or process the COFF file
+///     },
+///     Err(e) => eprintln!("Error loading COFF: {:?}", e),
+/// }
+/// ```
+///
+/// ## Using a byte buffer as a source:
+///
+/// ```
+/// use coffeeldr::CoffeeLdr;
+///
+/// let coff_data = include_bytes!("path/to/coff_file.o");
+/// let mut loader = CoffeeLdr::new(&coff_data);
+/// match loader {
+///     Ok(ldr) => {
+///         println!("COFF successfully loaded from buffer!");
+///         // Use `ldr` to execute or process the COFF file
+///     },
+///     Err(e) => eprintln!("Error loading COFF: {:?}", e),
+/// }
+/// ```
 #[derive(Default)]
 pub struct CoffeeLdr<'a> {
     /// COFF structure representing the loaded file or buffer.
@@ -87,39 +120,6 @@ impl<'a> CoffeeLdr<'a> {
     /// # Arguments
     ///
     /// * `source` - A value convertible into [`CoffSource`], representing either a file path or a byte buffer.
-    ///
-    /// # Examples
-    ///
-    /// ## Using a file as a source:
-    ///
-    /// ```
-    /// use coffeeldr::CoffeeLdr;
-    ///
-    /// let mut loader = CoffeeLdr::new("whoami.o");
-    /// match loader {
-    ///     Ok(ldr) => {
-    ///         println!("COFF successfully uploaded!");
-    ///         // Use `ldr` to execute or process the COFF file
-    ///     },
-    ///     Err(e) => eprintln!("Error loading COFF: {:?}", e),
-    /// }
-    /// ```
-    ///
-    /// ## Using a byte buffer as a source:
-    ///
-    /// ```
-    /// use coffeeldr::CoffeeLdr;
-    ///
-    /// let coff_data = include_bytes!("path/to/coff_file.o");
-    /// let mut loader = CoffeeLdr::new(&coff_data);
-    /// match loader {
-    ///     Ok(ldr) => {
-    ///         println!("COFF successfully loaded from buffer!");
-    ///         // Use `ldr` to execute or process the COFF file
-    ///     },
-    ///     Err(e) => eprintln!("Error loading COFF: {:?}", e),
-    /// }
-    /// ```
     pub fn new<T: Into<CoffSource<'a>>>(source: T) -> Result<Self> {
         // Processes COFF based on the source (file or buffer)
         let coff = match source.into() {
