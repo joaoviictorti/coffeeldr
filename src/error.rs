@@ -11,7 +11,7 @@ pub enum CoffeeLdrError {
     #[error("{0}")]
     Msg(String),
 
-    /// Binary serialization or deserialization error.
+    /// Error returned by the `binrw` parser while reading or deserializing COFF data.
     #[error("binrw error: {0}")]
     Binrw(binrw::Error),
 

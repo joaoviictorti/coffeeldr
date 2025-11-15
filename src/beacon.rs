@@ -30,18 +30,6 @@ use windows_sys::Win32::{
 
 use super::error::{CoffeeLdrError, Result};
 
-#[allow(dead_code)]
-const CALLBACK_OUTPUT: u32 = 0x0;
-
-#[allow(dead_code)]
-const CALLBACK_OUTPUT_OEM: u32 = 0x1e;
-
-#[allow(dead_code)]
-const CALLBACK_ERROR: u32 = 0x0d;
-
-#[allow(dead_code)]
-const CALLBACK_OUTPUT_UTF8: u32 = 0x20;
-
 /// Buffer for storing beacon output.
 static BEACON_BUFFER: Mutex<BeaconOutputBuffer> = Mutex::new(BeaconOutputBuffer::new());
 
@@ -139,7 +127,8 @@ struct Format {
 ///
 /// # Returns
 ///
-/// The function's address if found.
+/// Returns the function address associated with the given name, or an error if
+/// the function cannot be resolved.
 pub fn get_function_internal_address(name: &str) -> Result<usize> {
     match jenkins3(name) {
         // Output
@@ -188,7 +177,7 @@ pub fn get_function_internal_address(name: &str) -> Result<usize> {
 ///
 /// # Returns
 ///
-///  A cloned copy of the current output buffer if successful.
+/// Returns a cloned copy of the current beacon output buffer.  
 pub fn get_output_data() -> Option<BeaconOutputBuffer> {
     let mut beacon = BEACON_BUFFER.lock();
     if beacon.buffer.is_empty() {
@@ -544,8 +533,6 @@ unsafe extern "C" fn BeaconPrintf(_type: c_int, fmt: *mut c_char, mut args: ...)
 }
 
 /// Reverts the current process token to its original state.
-///
-/// This function attempts to revert the current process token and logs a warning if it fails.
 fn BeaconRevertToken() {
     unsafe {
         if RevertToSelf() == 0 {
@@ -568,10 +555,10 @@ fn BeaconUseToken(token: HANDLE) -> i32 {
 }
 
 /// Cleans up a process by closing its handles.
-///
+/// 
 /// # Arguments
 ///
-/// A pointer to a `PROCESS_INFORMATION` struct containing process handles.
+/// * `info` - A pointer to a `PROCESS_INFORMATION` struct containing process handles.
 fn BeaconCleanupProcess(info: *const PROCESS_INFORMATION) {
     unsafe {
         CloseHandle((*info).hProcess);
@@ -609,10 +596,6 @@ fn BeaconIsAdmin() -> u32 {
 }
 
 /// Swaps the endianness of a 32-bit unsigned integer.
-///
-/// # Arguments
-///
-/// * `src` - A 32-bit unsigned integer to be converted.
 ///
 /// # Returns
 ///

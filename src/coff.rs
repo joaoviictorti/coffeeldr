@@ -53,24 +53,29 @@ impl<'a> Default for Coff<'a> {
 }
 
 impl<'a> Coff<'a> {
-    /// Creates a new instance of the [`Coff`] structure from a given file.
+    /// Creates a new [`Coff`] instance by parsing the provided byte buffer.
     ///
     /// # Arguments
     ///
-    /// * `buffer` - Buffer of the Coff file to be analyzed.
+    /// * `buffer` - Raw bytes of a COFF file.
+    ///
+    /// # Errors
+    ///
+    /// Returned when the buffer does not represent a valid COFF structure.
     pub fn from_slice(buffer: &'a [u8]) -> Result<Self, CoffError> {
         Self::parse(buffer)
     }
 
-    /// Internal function to parse the COFF file from a byte buffer.
+    /// Parses a COFF file from the provided byte buffer.
     ///
     /// # Arguments
     ///
-    /// * `buffer` - Buffer of the Coff file to be analyzed.
+    /// * `buffer` - Raw bytes of the COFF file to be decoded.
     ///
     /// # Returns
     ///
-    /// If the buffer is successfully parsed into a `Coff` structure.
+    /// Returns a fully parsed [`Coff`] structure when the buffer contains valid COFF data.
+    /// If the buffer is malformed or incomplete, an appropriate `CoffError` is returned.
     fn parse(buffer: &'a [u8]) -> Result<Self, CoffError> {
         debug!("Parsing COFF file header, buffer size: {}", buffer.len());
 
@@ -132,6 +137,11 @@ impl<'a> Coff<'a> {
     }
 
     /// Validates the machine architecture of the COFF file.
+    ///
+    /// # Returns
+    ///
+    /// Returns the detected [`CoffMachine`] variant when the architecture
+    /// matches a supported format. Returns `UnsupportedArchitecture` otherwise.
     #[inline]
     fn validate_architecture(file_header: IMAGE_FILE_HEADER) -> Result<CoffMachine, CoffError> {
         match file_header.Machine {
@@ -216,12 +226,14 @@ impl<'a> Coff<'a> {
     }
 
     /// Aligns an `page` value to the next multiple of 0x1000 (page alignment).
+    #[inline]
     pub fn page_align(page: usize) -> usize {
         const SIZE_OF_PAGE: usize = 0x1000;
         (page + SIZE_OF_PAGE - 1) & !(SIZE_OF_PAGE - 1)
     }
 
     /// Retrieves the section name from an `IMAGE_SECTION_HEADER` struct.
+    #[inline]
     pub fn get_section_name(section: &IMAGE_SECTION_HEADER) -> String {
         let name_bytes = &section.Name;
         let name = String::from_utf8_lossy(name_bytes);
@@ -229,6 +241,7 @@ impl<'a> Coff<'a> {
     }
 
     /// Checks if the given type is classified as a function type.
+    #[inline]
     pub fn is_fcn(x: u16) -> bool {
         (x & 0x30) == (2 << 4)
     }

@@ -15,6 +15,11 @@ pub struct BeaconPack {
 
 impl BeaconPack {
     /// Returns the buffer with the total size packed at the beginning.
+    ///
+    /// # Returns
+    ///
+    /// Returns a new vector containing the size prefix followed by the
+    /// raw packed buffer content.
     pub fn getbuffer(&self) -> Result<Vec<u8>> {
         let mut buf = Vec::with_capacity(4 + self.buffer.len());
         buf.extend_from_slice(&self.size.to_le_bytes());
@@ -24,28 +29,55 @@ impl BeaconPack {
     }
 
     /// Returns the buffer encoded in hexadecimal format (as bytes).
+    ///
+    /// # Returns
+    ///
+    /// Returns a byte vector containing the hexadecimal representation of the
+    /// packed buffer.
     pub fn get_buffer_hex(&self) -> Result<Vec<u8>> {
         let buf = self.getbuffer()?;
         Ok(Vec::from_hex(hex::encode(&buf))?)
     }
 
-    /// Adds a 2-byte short value to the buffer.
+    /// Adds a 2-byte signed integer to the buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `short` - The value to append.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the value is successfully appended.
     pub fn addshort(&mut self, short: i16) -> Result<()> {
         self.write_i16(short);
         self.size += 2;
-
         Ok(())
     }
 
-    /// Adds a 4-byte integer to the buffer.
+    /// Adds a 4-byte signed integer to the buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `int` - The value to append.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the value is successfully appended.
     pub fn addint(&mut self, int: i32) -> Result<()> {
         self.write_i32(int);
         self.size += 4;
-
         Ok(())
     }
 
     /// Adds a UTF-8 string to the buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string to append.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the string is successfully appended.
     pub fn addstr(&mut self, s: &str) -> Result<()> {
         let s_bytes = s.as_bytes();
         let length = s_bytes.len() as u32 + 1;
@@ -60,10 +92,19 @@ impl BeaconPack {
     }
 
     /// Adds a UTF-16 wide string to the buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string to append as UTF-16.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the string is successfully appended.
     pub fn addwstr(&mut self, s: &str) -> Result<()> {
         let s_wide: Vec<u16> = s.encode_utf16().collect();
         let length = (s_wide.len() as u32 * 2) + 2;
         self.write_u32(length);
+
         for wchar in s_wide {
             self.write_u16(wchar);
         }
@@ -75,16 +116,23 @@ impl BeaconPack {
     }
 
     /// Adds a binary data block to the buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Raw bytes to append.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the data is successfully appended.
     pub fn addbin(&mut self, data: &[u8]) -> Result<()> {
         let length = data.len() as u32;
         self.write_u32(length);
         self.buffer.write_all(data)?;
         self.size += 4 + length;
-
         Ok(())
     }
 
-    /// Resets the buffer.
+    /// Resets the buffer to an empty state.
     pub fn reset(&mut self) {
         self.buffer.clear();
         self.size = 0;

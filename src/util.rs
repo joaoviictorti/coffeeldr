@@ -29,7 +29,8 @@ use super::error::{
 ///
 /// # Returns
 ///
-/// Containing the file's contents if the operation succeeds.
+/// Returns a vector containing the full contents of the file. If the file
+/// cannot be opened or read, an appropriate `CoffeeLdrError` is returned.
 pub fn read_file(name: &str) -> Result<Vec<u8>> {
     let file_name = CString::new(name)
         .map_err(|_| CoffeeLdrError::Msg(s!("Invalid cstring")))?;
