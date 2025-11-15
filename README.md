@@ -3,7 +3,7 @@
 ![Rust](https://img.shields.io/badge/made%20with-Rust-red)
 ![crate](https://img.shields.io/crates/v/coffeeldr.svg)
 ![docs](https://docs.rs/coffeeldr/badge.svg)
-![License](https://img.shields.io/github/license/joaoviictorti/coffeeldr)
+![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-brightgreen)
 [![Actions status](https://github.com/joaoviictorti/coffeeldr/actions/workflows/ci.yml/badge.svg)](https://github.com/joaoviictorti/coffeeldr/actions)
 
 A modern and lightweight COFF (Common Object File Format) loader for Windows written in Rust, designed to run COFF files on Windows. It supports both 32-bit and 64-bit architectures and allows you to load and execute COFF files from files or memory buffers with Rust’s safety and performance guarantees.
