@@ -1,4 +1,6 @@
+//! Errors returned by this crate.
 //!
+//! This module contains the definitions for all error types returned by this crate.
 
 use alloc::string::String;
 use thiserror::Error;
