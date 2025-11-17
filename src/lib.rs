@@ -8,7 +8,6 @@
 extern crate alloc;
 
 mod beacon;
-mod util;
 mod loader;
 mod beacon_pack;
 

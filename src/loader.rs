@@ -1,9 +1,11 @@
 use alloc::{
     boxed::Box,
     collections::BTreeMap,
+    ffi::CString, 
     format,
     string::{String, ToString},
     vec::Vec,
+    vec,
 };
 use core::intrinsics::{
     volatile_copy_nonoverlapping_memory, 
@@ -20,7 +22,7 @@ use core::{
 };
 
 use log::{debug, info, warn};
-use obfstr::obfstr as s;
+use obfstr::{obfstr as obf, obfstring as s};
 use dinvk::{dinvoke, pe::PE, data::NTSTATUS};
 use dinvk::module::{
     get_proc_address, 
@@ -33,7 +35,8 @@ use dinvk::winapis::{
     LoadLibraryA,
 };
 use windows_sys::Win32::{
-    Foundation::{GetLastError, STATUS_SUCCESS},
+    Foundation::*,
+    Storage::FileSystem::*,
     System::{
         Memory::*,
         SystemServices::*,
@@ -42,7 +45,6 @@ use windows_sys::Win32::{
     },
 };
 
-use super::util::read_file;
 use super::error::{
     CoffError, 
     CoffeeLdrError, 
@@ -399,7 +401,7 @@ impl<'a> CoffMemory<'a> {
 
         // Retrieving `.text` from the target module
         let pe = PE::parse(h_module);
-        let section = pe.section_by_name(s!(".text"))?;
+        let section = pe.section_by_name(obf!(".text"))?;
         let ptr = (h_module as usize + section.VirtualAddress as usize) as *mut c_void;
         let size = section.SizeOfRawData as usize;
 
@@ -497,7 +499,7 @@ impl CoffSymbol {
             .strip_prefix(prefix)
             .map_or_else(|| Err(CoffeeLdrError::SymbolIgnored), Ok)?;
 
-        if symbol_name.starts_with(s!("Beacon")) || symbol_name.starts_with(s!("toWideChar")) {
+        if symbol_name.starts_with(obf!("Beacon")) || symbol_name.starts_with(obf!("toWideChar")) {
             debug!("Resolving Beacon: {}", symbol_name);
             return get_function_internal_address(symbol_name);
         }
@@ -834,6 +836,45 @@ impl<'a> CoffRelocation<'a> {
     }
 }
 
+fn read_file(name: &str) -> Result<Vec<u8>> {
+    let file_name = CString::new(name)
+        .map_err(|_| CoffeeLdrError::Msg(s!("invalid cstring")))?;
+    let h_file = unsafe {
+        CreateFileA(
+            file_name.as_ptr().cast(),
+            GENERIC_READ,
+            FILE_SHARE_READ,
+            null_mut(),
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            null_mut(),
+        )
+    };
+
+    if h_file == INVALID_HANDLE_VALUE {
+        return Err(CoffeeLdrError::Msg(s!("failed to open file")));
+    }
+
+    let size = unsafe { GetFileSize(h_file, null_mut()) };
+    if size == INVALID_FILE_SIZE {
+        return Err(CoffeeLdrError::Msg(s!("invalid file size")));
+    }
+
+    let mut out = vec![0u8; size as usize];
+    let mut bytes = 0;
+    unsafe {
+        ReadFile(
+            h_file,
+            out.as_mut_ptr(),
+            out.len() as u32,
+            &mut bytes,
+            null_mut(),
+        );
+    }
+
+    Ok(out)
+}
+
 #[inline]
 fn NtFreeVirtualMemory(
     process_handle: *mut c_void, 
@@ -905,7 +946,6 @@ mod tests {
 
         // Replace Shellcode
         let buf: [u8; 3] = [0x41, 0x41, 0x41]; 
-
         pack.addint(23316); // PID
         pack.addbin(&buf)?; // Shellcode
 
@@ -931,7 +971,7 @@ mod tests {
 
     #[test]
     fn test_buffer_memory() -> Result<()> {
-        let buffer = include_bytes!("../bofs/whoami.x64.o");
+        let buffer = include_bytes!("bofs/whoami.x64.o");
         let mut coffee = CoffeeLdr::new(buffer)?;
         let output = coffee.run("go", None, None)?;
         println!("{output}");
