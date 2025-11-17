@@ -2,7 +2,7 @@
 name = "coffeeldr"
 version = "0.3.3"
 edition = "2024"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
 authors = ["João Victor"]
 description = "A COFF (Common Object File Format) loader written in Rust"
