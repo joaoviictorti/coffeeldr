@@ -557,16 +557,16 @@ impl Default for CoffSymbol {
 #[derive(Debug, Clone)]
 struct SectionMap {
     /// Base address of the section.
-    pub base: *mut c_void,
+    base: *mut c_void,
 
     /// Section size in bytes.
-    pub size: usize,
+    size: usize,
 
     /// Section characteristics.
-    pub characteristics: u32,
+    characteristics: u32,
 
     /// Section name.
-    pub name: String,
+    name: String,
 }
 
 impl SectionMap {
