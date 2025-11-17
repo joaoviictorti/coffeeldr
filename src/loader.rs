@@ -108,9 +108,6 @@ pub struct CoffeeLdr<'a> {
     /// Table of resolved external functions.
     symbols: CoffSymbol,
 
-    /// Whether module stomping is enabled.
-    stomping: bool,
-
     /// Name of the module that will be stomped when stomping is enabled.
     module: &'a str,
 }
@@ -167,7 +164,6 @@ impl<'a> CoffeeLdr<'a> {
     ///     .with_module_stomping("amsi.dll");
     /// ```
     pub fn with_module_stomping(mut self, module: &'a str) -> Self {
-        self.stomping = true;
         self.module = module;
         self
     }
@@ -231,26 +227,23 @@ impl<'a> CoffeeLdr<'a> {
     /// Fails if memory allocation fails, relocation cannot be applied,
     /// or required symbols cannot be resolved.
     fn prepare(&mut self) -> Result<()> {
-        // Verify that the COFF file's architecture.
+        // Verify that the COFF file's architecture
         self.coff.arch.check_architecture()?;
 
-        // Allocate memory for loading COFF sections and store the allocated section mappings.
-        // If module stomping is enabled, overwrite the specified module in memory. Otherwise, 
-        // allocate standalone memory for the BOF payload.
-        let mem = CoffMemory::new(&self.coff, self.stomping, self.module);
+        // Allocate memory for loading COFF sections and store the allocated section mappings
+        let mem = CoffMemory::new(&self.coff, self.module);
         let (sections, sec_base) = mem.alloc()?;
         self.section_map = sections;
 
-        // Resolve external symbols (such as function addresses) and build a function lookup map.
-        // When using module stomping, base resolution on the stomped module's memory address.
-        let (functions, symbols) = CoffSymbol::new(&self.coff, self.stomping, sec_base)?;
+        // Resolve external symbols and build a function lookup map
+        let (functions, symbols) = CoffSymbol::new(&self.coff, self.module, sec_base)?;
         self.symbols = symbols;
 
-        // Process relocations to correctly adjust symbol addresses based on memory layout.
+        // Process relocations to correctly adjust symbol addresses based on memory layout
         let reloc = CoffRelocation::new(&self.coff, &self.section_map);
         reloc.apply_relocations(&functions, &self.symbols)?;
 
-        // Adjust memory permissions for allocated sections.
+        // Adjust memory permissions for allocated sections
         self.section_map
             .iter_mut()
             .filter(|section| section.size > 0)
@@ -262,8 +255,8 @@ impl<'a> CoffeeLdr<'a> {
 
 impl Drop for CoffeeLdr<'_> {
     fn drop(&mut self) {
-        // When stomping, memory belongs to another module and must not be freed.
-        if self.stomping {
+        // When stomping, memory belongs to another module and must not be freed
+        if !self.module.is_empty() {
             return;
         }
         
@@ -295,19 +288,15 @@ struct CoffMemory<'a> {
     /// Parsed COFF file to be loaded.
     coff: &'a Coff<'a>,
 
-    /// Whether module stomping is enabled.
-    stomping: bool,
-
     /// Name of the target module to stomp.
     module: &'a str,
 }
 
 impl<'a> CoffMemory<'a> {
     /// Creates a memory allocator for this COFF instance.
-    pub fn new(coff: &'a Coff<'a>, stomping: bool, module: &'a str) -> Self {
+    pub fn new(coff: &'a Coff<'a>, module: &'a str) -> Self {
         Self {
             coff,
-            stomping,
             module,
         }
     }
@@ -318,7 +307,7 @@ impl<'a> CoffMemory<'a> {
     ///
     /// Fails if memory cannot be allocated or stomping cannot be applied.
     pub fn alloc(&self) -> Result<(Vec<SectionMap>, Option<*mut c_void>)> {
-        if self.stomping {
+        if !self.module.is_empty() {
             self.alloc_with_stomping()
         } else {
             self.alloc_bof_memory()
@@ -378,9 +367,7 @@ impl<'a> CoffMemory<'a> {
         }
 
         // This is necessary because REL32 instructions must remain within range, and allocating the `Symbol`
-        // elsewhere (e.g. with a distant `NtAllocateVirtualMemory`) could lead to crashes.
-        //
-        // Returning `Some(sec_base)` signals that the loader must re-use that exact memory area.
+        // elsewhere (e.g. with a distant `NtAllocateVirtualMemory`) could lead to crashes
         debug!(
             "Memory successfully allocated for BOF at address (Module Stomping): {:?}",
             text_address
@@ -438,14 +425,14 @@ impl CoffSymbol {
     /// Fails if the table cannot be allocated or any symbol cannot be resolved.
     pub fn new(
         coff: &Coff,
-        stomping: bool,
+        module: &str,
         base_addr: Option<*mut c_void>,
     ) -> Result<(BTreeMap<String, usize>, Self)> {
         // Resolves the symbols of the coff file
         let symbols = Self::process_symbols(coff)?;
         
-        // When stomping, we must reuse the memory at `base_addr`.
-        let address = if stomping {
+        // When stomping, we must reuse the memory at `base_addr`
+        let address = if !module.is_empty() {
             let addr = base_addr.ok_or(CoffeeLdrError::MissingStompingBaseAddress)?;
             addr as *mut *mut c_void
         } else {
@@ -692,17 +679,17 @@ impl<'a> CoffRelocation<'a> {
     ) -> Result<()> {
         let mut index = 0;
         for (i, section) in self.coff.sections.iter().enumerate() {
-            // Retrieve relocation entries for the current section.
+            // Retrieve relocation entries for the current section
             let relocations = self.coff.get_relocations(section);
             for relocation in relocations.iter() {
-                // Look up the symbol associated with the relocation.
+                // Look up the symbol associated with the relocation
                 let symbol = &self.coff.symbols[relocation.SymbolTableIndex as usize];
 
-                // Compute the address where the relocation should be applied.
+                // Compute the address where the relocation should be applied
                 let symbol_reloc_addr = (self.section_map[i].base as usize 
                     + unsafe { relocation.Anonymous.VirtualAddress } as usize) as *mut c_void;
 
-                // Retrieve the symbol's name (used for function lookups).
+                // Retrieve the symbol's name 
                 let name = self.coff.get_symbol_name(symbol);
                 if let Some(function_address) = functions.get(&name).map(|&addr| addr as *mut c_void) {
                     unsafe {
@@ -711,7 +698,7 @@ impl<'a> CoffRelocation<'a> {
                             .add(index)
                             .write_volatile(function_address);
 
-                        // Apply the relocation using the resolved function address.
+                        // Apply the relocation using the resolved function address
                         self.process_relocations(
                             symbol_reloc_addr, 
                             function_address, 
@@ -723,7 +710,7 @@ impl<'a> CoffRelocation<'a> {
 
                     index += 1;
                 } else {
-                    // Apply the relocation but without a resolved function address (null pointer).
+                    // Apply the relocation but without a resolved function address (null pointer)
                     self.process_relocations(
                         symbol_reloc_addr, 
                         null_mut(), 
@@ -889,4 +876,65 @@ fn LoadLibraryExA(
         h_file,
         dw_flags
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{*, error::Result};
+    use dinvk::println;
+
+    #[test]
+    fn test_whoami() -> Result<()> {
+        let mut coffee = CoffeeLdr::new("bofs/whoami.x64.o")?;
+        let output = coffee.run("go", None, None)?;
+        println!("{output}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_stomping() -> Result<()> {
+        let mut coffee = CoffeeLdr::new("bofs/whoami.x64.o")?.with_module_stomping("amsi.dll");
+        let output = coffee.run("go", None, None)?;
+        println!("{output}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_ntcreatethread() -> Result<()> {
+        let mut pack = BeaconPack::default();
+
+        // Replace Shellcode
+        let buf: [u8; 3] = [0x41, 0x41, 0x41]; 
+
+        pack.addint(23316); // PID
+        pack.addbin(&buf)?; // Shellcode
+
+        let args = pack.get_buffer_hex()?;
+        let mut coffee = CoffeeLdr::new("bofs/ntcreatethread.x64.o")?;
+        let output = coffee.run("go", Some(args.as_ptr() as _), Some(args.len()))?;
+        println!("{output}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dir() -> Result<()> {
+        let mut pack = BeaconPack::default();
+        pack.addstr("C:\\")?;
+        let args = pack.get_buffer_hex()?;
+        let mut coffee = CoffeeLdr::new("bofs/dir.x64.o")?;
+        let output = coffee.run("go", Some(args.as_ptr() as _), Some(args.len()))?;
+        println!("{output}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_buffer_memory() -> Result<()> {
+        let buffer = include_bytes!("../bofs/whoami.x64.o");
+        let mut coffee = CoffeeLdr::new(buffer)?;
+        let output = coffee.run("go", None, None)?;
+        println!("{output}");
+        Ok(())
+    }
 }

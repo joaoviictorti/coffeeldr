@@ -510,10 +510,10 @@ fn toWideChar(src: *const c_char, dst: *mut u16, max: c_int) -> c_int {
     }
 
     unsafe {
-        // Converting the `src` pointer to a C string (`CStr`)
+        // Converting the `src` pointer to a C string
         let c_str = CStr::from_ptr(src);
 
-        // Converts CStr to a Rust string (&str)
+        // Converts CStr to a Rust string
         if let Ok(str_slice) = c_str.to_str() {
             // Encoding a Rust string as UTF-16
             let utf16_chars = str_slice.encode_utf16().collect::<Vec<u16>>();
