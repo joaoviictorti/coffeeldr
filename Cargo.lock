@@ -57,7 +57,7 @@ checksum = "9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268"
 
 [[package]]
 name = "coffeeldr"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "binrw",
  "dinvk",
@@ -72,9 +72,9 @@ dependencies = [
 
 [[package]]
 name = "dinvk"
-version = "0.3.1"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91eaaa6645d9f59464500fe0c3b3f65308456d38f18de09fa0547f8eaea3643e"
+checksum = "0f03a44cfde2fcf79424fd55b6ade1109d74c2c236dfb30e87a662537630ff4b"
 dependencies = [
  "bitflags",
  "cfg-if",

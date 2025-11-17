@@ -3,23 +3,24 @@ use binrw::io::Write;
 use hex::FromHex;
 use super::error::Result;
 
-/// A struct that represents a buffer for packing data with size tracking.
+/// Buffer used to build Beacon-compatible packed arguments.
+///
+/// The buffer keeps track of the total payload size and exposes helpers
+/// for appending integers, strings, wide strings and raw binary data.
 #[derive(Default)]
 pub struct BeaconPack {
-    /// The internal buffer where data is stored.
+    /// Internal byte buffer backing this pack.
     buffer: Vec<u8>,
 
-    /// Tracks the size of the data currently in the buffer.
+    /// Logical size of the packed payload (excluding the size prefix).
     size: u32,
 }
 
 impl BeaconPack {
-    /// Returns the buffer with the total size packed at the beginning.
+    /// Returns a copy of the packed buffer with the size prefix prepended.
     ///
-    /// # Returns
-    ///
-    /// Returns a new vector containing the size prefix followed by the
-    /// raw packed buffer content.
+    /// The resulting vector starts with a 4-byte little-endian length field,
+    /// followed by the raw payload accumulated so far.
     pub fn getbuffer(&self) -> Result<Vec<u8>> {
         let mut buf = Vec::with_capacity(4 + self.buffer.len());
         buf.extend_from_slice(&self.size.to_le_bytes());
@@ -28,79 +29,61 @@ impl BeaconPack {
         Ok(buf)
     }
 
-    /// Returns the buffer encoded in hexadecimal format (as bytes).
+    /// Returns the packed buffer encoded as hexadecimal bytes.
     ///
-    /// # Returns
+    /// The packed payload (including the size prefix) is hex-encoded and
+    /// the resulting ASCII representation is returned as a byte vector.
     ///
-    /// Returns a byte vector containing the hexadecimal representation of the
-    /// packed buffer.
+    /// # Errors
+    ///
+    /// Propagates any error produced during hex conversion.
     pub fn get_buffer_hex(&self) -> Result<Vec<u8>> {
         let buf = self.getbuffer()?;
         Ok(Vec::from_hex(hex::encode(&buf))?)
     }
 
-    /// Adds a 2-byte signed integer to the buffer.
+    /// Appends a 2-byte signed integer to the buffer.
     ///
-    /// # Arguments
-    ///
-    /// * `short` - The value to append.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the value is successfully appended.
-    pub fn addshort(&mut self, short: i16) -> Result<()> {
+    /// The value is written in little-endian format and the tracked size
+    /// is increased accordingly.
+    pub fn addshort(&mut self, short: i16) {
         self.write_i16(short);
         self.size += 2;
-        Ok(())
     }
 
-    /// Adds a 4-byte signed integer to the buffer.
+    /// Appends a 4-byte signed integer to the buffer.
     ///
-    /// # Arguments
-    ///
-    /// * `int` - The value to append.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the value is successfully appended.
-    pub fn addint(&mut self, int: i32) -> Result<()> {
+    /// The value is written in little-endian format and the tracked size
+    /// is increased accordingly.
+    pub fn addint(&mut self, int: i32) {
         self.write_i32(int);
         self.size += 4;
-        Ok(())
     }
 
-    /// Adds a UTF-8 string to the buffer.
+    /// Appends a UTF-8 string with a length prefix and null terminator.
     ///
-    /// # Arguments
+    /// # Errors
     ///
-    /// * `s` - The string to append.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the string is successfully appended.
+    /// Propagates any error produced while writing into the internal buffer.
     pub fn addstr(&mut self, s: &str) -> Result<()> {
         let s_bytes = s.as_bytes();
         let length = s_bytes.len() as u32 + 1;
         self.write_u32(length);
         self.buffer.write_all(s_bytes)?;
 
-        // Null-termination
+        // Null terminator.
         self.write_u8(0);
         self.size += 4 + s_bytes.len() as u32 + 1;
 
         Ok(())
     }
 
-    /// Adds a UTF-16 wide string to the buffer.
+    /// Appends a UTF-16LE wide string with a length prefix and null terminator.
     ///
-    /// # Arguments
+    /// # Errors
     ///
-    /// * `s` - The string to append as UTF-16.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the string is successfully appended.
-    pub fn addwstr(&mut self, s: &str) -> Result<()> {
+    /// Propagates any error produced while writing into the internal buffer.
+    pub fn addwstr(&mut self, s: &str) {
         let s_wide: Vec<u16> = s.encode_utf16().collect();
         let length = (s_wide.len() as u32 * 2) + 2;
         self.write_u32(length);
@@ -111,19 +94,13 @@ impl BeaconPack {
 
         self.write_u16(0);
         self.size += 4 + length;
-
-        Ok(())
     }
 
-    /// Adds a binary data block to the buffer.
+    /// Appends a raw binary blob with a length prefix.
     ///
-    /// # Arguments
+    /// # Errors
     ///
-    /// * `data` - Raw bytes to append.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the data is successfully appended.
+    /// Propagates any error produced while writing into the internal buffer.
     pub fn addbin(&mut self, data: &[u8]) -> Result<()> {
         let length = data.len() as u32;
         self.write_u32(length);
@@ -132,7 +109,7 @@ impl BeaconPack {
         Ok(())
     }
 
-    /// Resets the buffer to an empty state.
+    /// Clears the internal buffer and resets the tracked size.
     pub fn reset(&mut self) {
         self.buffer.clear();
         self.size = 0;

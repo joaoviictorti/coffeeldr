@@ -27,7 +27,7 @@ fn test_bof_ntcreatethread() -> Result<(), Box<dyn Error>> {
     // Replace Shellcode
     let buf: [u8; 3] = [0x41, 0x41, 0x41]; 
 
-    pack.addint(23316)?; // PID
+    pack.addint(23316); // PID
     pack.addbin(&buf)?; // Shellcode
 
     let args = pack.get_buffer_hex()?;

@@ -23,17 +23,13 @@ use super::error::{
 
 /// Reads the entire contents of a file into memory using the Windows API.
 ///
-/// # Arguments
+/// # Errors
 ///
-/// * `name` - The path to the file as a UTF-8 string.
-///
-/// # Returns
-///
-/// Returns a vector containing the full contents of the file. If the file
-/// cannot be opened or read, an appropriate `CoffeeLdrError` is returned.
+/// Fails when the file cannot be opened, when its size is invalid, or when the
+/// path cannot be converted into a valid C-style string.
 pub fn read_file(name: &str) -> Result<Vec<u8>> {
     let file_name = CString::new(name)
-        .map_err(|_| CoffeeLdrError::Msg(s!("Invalid cstring")))?;
+        .map_err(|_| CoffeeLdrError::Msg(s!("invalid cstring")))?;
     let h_file = unsafe {
         CreateFileA(
             file_name.as_ptr().cast(),

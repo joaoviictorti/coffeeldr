@@ -45,7 +45,7 @@ fn process_input(input: &str, pack: &mut BeaconPack) -> Result<(), String> {
         let short_data = &input[7..];
         match short_data.parse::<i16>() {
             Ok(value) => {
-                pack.addshort(value).map_err(|e| format!("Error adding short: {e}"))?;
+                pack.addshort(value);
                 info!("Added short: {}", value);
             }
             Err(e) => return Err(format!("Error converting to short: {e}")),
@@ -55,7 +55,7 @@ fn process_input(input: &str, pack: &mut BeaconPack) -> Result<(), String> {
         let int_data = &input[5..];
         match int_data.parse::<i32>() {
             Ok(value) => {
-                pack.addint(value).map_err(|e| format!("Error adding int: {e}"))?;
+                pack.addint(value);
                 info!("Added int: {}", value);
             }
             Err(e) => return Err(format!("Error converting to int: {e}")),
@@ -68,7 +68,7 @@ fn process_input(input: &str, pack: &mut BeaconPack) -> Result<(), String> {
 
     } else if input.starts_with("/wstr:") {
         let wstr_data = &input[6..];
-        pack.addwstr(wstr_data).map_err(|e| format!("Error adding wide wstr: {e}"))?;
+        pack.addwstr(wstr_data);
         info!("Added wide string: {}", wstr_data);
     
     } else if input.starts_with("/bin:") {

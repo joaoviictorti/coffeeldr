@@ -1,3 +1,5 @@
+//! COFF parsing utilities for the CoffeeLdr loader.
+
 use core::ffi::{CStr, c_void};
 use alloc::{
     string::{String, ToString},
@@ -24,10 +26,10 @@ const MAX_SECTIONS: u16 = 96;
 
 /// Represents a COFF (Common Object File Format) file.
 pub struct Coff<'a> {
-    //// The COFF file header (`IMAGE_FILE_HEADER`).
+    /// The COFF file header (`IMAGE_FILE_HEADER`).
     pub file_header: IMAGE_FILE_HEADER,
 
-    // A vector of COFF symbols (`IMAGE_SYMBOL`).
+    /// A vector of COFF symbols (`IMAGE_SYMBOL`).
     pub symbols: Vec<IMAGE_SYMBOL>,
 
     /// A vector of section headers (`IMAGE_SECTION_HEADER`).
@@ -53,29 +55,29 @@ impl<'a> Default for Coff<'a> {
 }
 
 impl<'a> Coff<'a> {
-    /// Creates a new [`Coff`] instance by parsing the provided byte buffer.
+    /// Parses a COFF object from a byte slice.
     ///
-    /// # Arguments
-    ///
-    /// * `buffer` - Raw bytes of a COFF file.
+    /// The slice must contain a valid COFF file header, section table and
+    /// symbol table. Minimal validation is performed to ensure the layout is
+    /// consistent.
     ///
     /// # Errors
     ///
-    /// Returned when the buffer does not represent a valid COFF structure.
+    /// Fails when the file is too small, the header is invalid, the
+    /// architecture is unsupported, or any section or symbol fails to decode.
     pub fn from_slice(buffer: &'a [u8]) -> Result<Self, CoffError> {
         Self::parse(buffer)
     }
 
-    /// Parses a COFF file from the provided byte buffer.
+    /// Internal parser for COFF structures.
     ///
-    /// # Arguments
+    /// Reads the file header, determines the architecture, loads the
+    /// symbol table and section table, and constructs a `Coff` instance
+    /// referencing the original buffer.
     ///
-    /// * `buffer` - Raw bytes of the COFF file to be decoded.
+    /// # Errors
     ///
-    /// # Returns
-    ///
-    /// Returns a fully parsed [`Coff`] structure when the buffer contains valid COFF data.
-    /// If the buffer is malformed or incomplete, an appropriate `CoffError` is returned.
+    /// Fails if any field is malformed or exceeds allowable limits.
     fn parse(buffer: &'a [u8]) -> Result<Self, CoffError> {
         debug!("Parsing COFF file header, buffer size: {}", buffer.len());
 
@@ -136,12 +138,11 @@ impl<'a> Coff<'a> {
         })
     }
 
-    /// Validates the machine architecture of the COFF file.
+    /// Determines the machine architecture from the COFF header.
     ///
-    /// # Returns
+    /// # Errors
     ///
-    /// Returns the detected [`CoffMachine`] variant when the architecture
-    /// matches a supported format. Returns `UnsupportedArchitecture` otherwise.
+    /// Fails if the machine field does not match any supported architecture.
     #[inline]
     fn validate_architecture(file_header: IMAGE_FILE_HEADER) -> Result<CoffMachine, CoffError> {
         match file_header.Machine {
@@ -154,7 +155,7 @@ impl<'a> Coff<'a> {
         }
     }
 
-    /// Calculates the total size of the image, including alignment and symbol relocation.
+    /// Computes the total allocation size needed to load the COFF image.
     pub fn size(&self) -> usize {
         let length = self
             .sections
@@ -183,7 +184,9 @@ impl<'a> Coff<'a> {
         Self::page_align(total_length)
     }
 
-    /// Returns the relocation entries for a given section.
+    /// Returns relocation entries for the specified section.
+    ///
+    /// Invalid relocations are logged and skipped, allowing parsing to proceed.
     pub fn get_relocations(&self, section: &IMAGE_SECTION_HEADER) -> Vec<IMAGE_RELOCATION> {
         let reloc_offset = section.PointerToRelocations as usize;
         let num_relocs = section.NumberOfRelocations as usize;
@@ -203,7 +206,7 @@ impl<'a> Coff<'a> {
         relocations
     }
 
-    /// Retrieves the name of a symbol from the symbol table.
+    /// Reads the symbol name, handling short names and long names from the string table.
     pub fn get_symbol_name(&self, symtbl: &IMAGE_SYMBOL) -> String {
         unsafe {
             let name = if symtbl.N.ShortName[0] != 0 {
@@ -225,25 +228,24 @@ impl<'a> Coff<'a> {
         }
     }
 
-    /// Aligns an `page` value to the next multiple of 0x1000 (page alignment).
+    /// Rounds a value up to the next page boundary.
     #[inline]
     pub fn page_align(page: usize) -> usize {
         const SIZE_OF_PAGE: usize = 0x1000;
         (page + SIZE_OF_PAGE - 1) & !(SIZE_OF_PAGE - 1)
     }
 
-    /// Retrieves the section name from an `IMAGE_SECTION_HEADER` struct.
+    /// Extracts the section name, trimming trailing NUL bytes.
     #[inline]
     pub fn get_section_name(section: &IMAGE_SECTION_HEADER) -> String {
-        let name_bytes = &section.Name;
-        let name = String::from_utf8_lossy(name_bytes);
-        name.trim_end_matches('\0').to_string()
+        let s = String::from_utf8_lossy(&section.Name);
+        s.trim_end_matches('\0').to_string()
     }
 
-    /// Checks if the given type is classified as a function type.
+    /// Determines whether a symbol type describes a function.
     #[inline]
-    pub fn is_fcn(x: u16) -> bool {
-        (x & 0x30) == (2 << 4)
+    pub fn is_fcn(ty: u16) -> bool {
+        (ty & 0x30) == (2 << 4)
     }
 }
 
@@ -258,7 +260,11 @@ pub enum CoffMachine {
 }
 
 impl CoffMachine {
-    /// Checks if the COFF file's architecture matches the architecture of the system.
+    /// Validates that the COFF architecture matches the host process.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the COFF architecture does not match the current pointer width.
     #[inline]
     pub fn check_architecture(&self) -> Result<(), CoffeeLdrError> {
         match self {
@@ -294,21 +300,18 @@ pub enum CoffSource<'a> {
 }
 
 impl<'a> From<&'a str> for CoffSource<'a> {
-    /// Converts a file path (`&'a str`) to a COFF source (`CoffSource::File`).
     fn from(file: &'a str) -> Self {
         CoffSource::File(file)
     }
 }
 
 impl<'a, const N: usize> From<&'a [u8; N]> for CoffSource<'a> {
-    /// Converts a fixed-size byte array (`&[u8; N]`) to a COFF source (`CoffSource::Buffer`).
     fn from(buffer: &'a [u8; N]) -> Self {
         CoffSource::Buffer(buffer)
     }
 }
 
 impl<'a> From<&'a [u8]> for CoffSource<'a> {
-    /// Converts a byte slice (`&[u8]`) to a COFF source (`CoffSource::Buffer`).
     fn from(buffer: &'a [u8]) -> Self {
         CoffSource::Buffer(buffer)
     }
