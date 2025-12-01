@@ -13,7 +13,7 @@ use core::{
 use spin::Mutex;
 use obfstr::obfstr as s;
 use dinvk::{winapis::NtCurrentProcess, syscall};
-use dinvk::{data::OBJECT_ATTRIBUTES, hash::jenkins3};
+use dinvk::{types::OBJECT_ATTRIBUTES, hash::jenkins3};
 use windows_sys::Win32::{
     Security::*,
     Foundation::{CloseHandle, HANDLE, STATUS_SUCCESS},
@@ -28,7 +28,7 @@ use windows_sys::Win32::{
     },
 };
 
-use super::error::{CoffeeLdrError, Result};
+use crate::error::{CoffeeLdrError, Result};
 
 /// Global output buffer used by Beacon-compatible functions.
 static BEACON_BUFFER: Mutex<BeaconOutputBuffer> = Mutex::new(BeaconOutputBuffer::new());
@@ -134,42 +134,41 @@ struct Format {
 pub fn get_function_internal_address(name: &str) -> Result<usize> {
     match jenkins3(name) {
         // Output
-        3210322847u32 => Ok(BeaconPrintf as *const () as usize),
-        358755801u32 => Ok(BeaconOutput as *const () as usize),
-        2979319955u32 => Ok(BeaconGetOutputData as *const () as usize),
+        3210322847u32 => Ok(beacon_printf as *const () as usize),
+        358755801u32 => Ok(beacon_output as *const () as usize),
+        2979319955u32 => Ok(beacon_get_output_data as *const () as usize),
 
         // Token
-        3202664826u32 => Ok(BeaconIsAdmin as *const () as usize),
-        233171701u32 => Ok(BeaconUseToken as *const () as usize),
-        2754379686u32 => Ok(BeaconRevertToken as *const () as usize),
+        3202664826u32 => Ok(beacon_is_admin as *const () as usize),
+        233171701u32 => Ok(beacon_use_token as *const () as usize),
+        2754379686u32 => Ok(beacon_rever_token as *const () as usize),
 
         // Format
-        1870274128u32 => Ok(BeaconFormatInt as *const () as usize),
-        1617256401u32 => Ok(BeaconFormatFree as *const () as usize),
-        687949845u32 => Ok(BeaconFormatAlloc as *const () as usize),
-        305071883u32 => Ok(BeaconFormatReset as *const () as usize),
-        2824797381u32 => Ok(BeaconFormatPrintf as *const () as usize),
-        814630661u32 => Ok(BeaconFormatAppend as *const () as usize),
-        2821454172u32 => Ok(BeaconFormatToString as *const () as usize),
+        1870274128u32 => Ok(beacon_format_int as *const () as usize),
+        1617256401u32 => Ok(beacon_format_free as *const () as usize),
+        687949845u32 => Ok(beacon_format_alloc as *const () as usize),
+        305071883u32 => Ok(beacon_format_reset as *const () as usize),
+        2824797381u32 => Ok(beacon_formt_printf as *const () as usize),
+        814630661u32 => Ok(beacon_format_append as *const () as usize),
+        2821454172u32 => Ok(beacon_format_to_string as *const () as usize),
 
         // Process / injection
-        3748796315u32 => Ok(BeaconGetSpawnTo as *const () as usize),
-        1991785755u32 => Ok(BeaconInjectProcess as *const () as usize),
-        2335479872u32 => Ok(BeaconCleanupProcess as *const () as usize),
-        2755057638u32 => Ok(BeaconSpawnTemporaryProcess as *const () as usize),
-        131483084u32 => Ok(BeaconInjectTemporaryProcess as *const () as usize),
+        3748796315u32 => Ok(beacon_get_spawn_to as *const () as usize),
+        1991785755u32 => Ok(beacon_inject_process as *const () as usize),
+        2335479872u32 => Ok(beacon_cleanup_process as *const () as usize),
+        2755057638u32 => Ok(beacon_spawn_temporary_process as *const () as usize),
+        131483084u32 => Ok(beacon_inject_temporary_process as *const () as usize),
 
         // Data
-        1942020652u32 => Ok(BeaconDataInt as *const () as usize),
-        1136370979u32 => Ok(BeaconDataShort as *const () as usize),
-        709123669u32 => Ok(BeaconDataParse as *const () as usize),
-        2194280572u32 => Ok(BeaconDataLength as *const () as usize),
-        596399976u32 => Ok(BeaconDataExtract as *const () as usize),
-        275872794u32 => Ok(BeaconDataPtr as *const () as usize),
+        1942020652u32 => Ok(beacon_data_int as *const () as usize),
+        1136370979u32 => Ok(beacon_data_short as *const () as usize),
+        709123669u32 => Ok(beacon_data_parse as *const () as usize),
+        2194280572u32 => Ok(beacon_data_length as *const () as usize),
+        596399976u32 => Ok(beacon_data_extract as *const () as usize),
+        275872794u32 => Ok(beacon_data_ptr as *const () as usize),
 
         // Utils
-        2580203873u32 => Ok(toWideChar as *const () as usize),
-
+        2580203873u32 => Ok(to_wide_char as *const () as usize),
         3816160102u32 => Ok(0),
         _ => Err(CoffeeLdrError::FunctionInternalNotFound(name.to_string())),
     }
@@ -194,7 +193,7 @@ pub fn get_output_data() -> Option<BeaconOutputBuffer> {
 /// Allocates a new `Format` buffer for Beacon-formatting operations.
 ///
 /// Allocation uses zeroed memory and behaves like the standard BOF runtime.
-fn BeaconFormatAlloc(format: *mut Format, max: c_int) {
+fn beacon_format_alloc(format: *mut Format, max: c_int) {
     if format.is_null() || max == 0 {
         return;
     }
@@ -214,7 +213,7 @@ fn BeaconFormatAlloc(format: *mut Format, max: c_int) {
 /// Clears the contents of a `Format` buffer by zeroing it.
 ///
 /// The pointer is reset back to the beginning.
-fn BeaconFormatReset(format: *mut Format) {
+fn beacon_format_reset(format: *mut Format) {
     if format.is_null() {
         return;
     }
@@ -229,7 +228,7 @@ fn BeaconFormatReset(format: *mut Format) {
 /// Converts the contents of a `Format` buffer into a C-style string.
 ///
 /// Returns a pointer to the underlying buffer.
-fn BeaconFormatToString(format: *mut Format, size: *mut c_int) -> *mut c_char {
+fn beacon_format_to_string(format: *mut Format, size: *mut c_int) -> *mut c_char {
     if format.is_null() || size.is_null() {
         return null_mut();
     }
@@ -241,7 +240,7 @@ fn BeaconFormatToString(format: *mut Format, size: *mut c_int) -> *mut c_char {
 }
 
 /// Appends a big-endian integer to the format buffer.
-fn BeaconFormatInt(format: *mut Format, value: c_int) {
+fn beacon_format_int(format: *mut Format, value: c_int) {
     if format.is_null() {
         return;
     }
@@ -260,7 +259,7 @@ fn BeaconFormatInt(format: *mut Format, value: c_int) {
 }
 
 /// Appends arbitrary raw bytes to a `Format` buffer.
-fn BeaconFormatAppend(format: *mut Format, text: *const c_char, len: c_int) {
+fn beacon_format_append(format: *mut Format, text: *const c_char, len: c_int) {
     if format.is_null() || text.is_null() || len <= 0 {
         return;
     }
@@ -277,7 +276,7 @@ fn BeaconFormatAppend(format: *mut Format, text: *const c_char, len: c_int) {
 }
 
 /// Frees the memory associated with a `Format` buffer.
-fn BeaconFormatFree(format: *mut Format) {
+fn beacon_format_free(format: *mut Format) {
     if format.is_null() {
         return;
     }
@@ -300,9 +299,9 @@ fn BeaconFormatFree(format: *mut Format) {
 /// Formats a string using printf-style formatting and appends the result
 /// to a `Format` buffer.
 ///
-/// Follows the behavior of Beacon’s `BeaconFormatPrintf`.
+/// Follows the behavior of Beacon’s `beacon_formt_printf`.
 #[unsafe(no_mangle)]
-unsafe extern "C" fn BeaconFormatPrintf(format: *mut Format, fmt: *const c_char, mut args: ...) {
+unsafe extern "C" fn beacon_formt_printf(format: *mut Format, fmt: *const c_char, mut args: ...) {
     if format.is_null() || fmt.is_null() {
         return;
     }
@@ -327,7 +326,7 @@ unsafe extern "C" fn BeaconFormatPrintf(format: *mut Format, fmt: *const c_char,
 }
 
 /// Extracts a 2-byte value from a Beacon `Data` buffer.
-fn BeaconDataShort(data: *mut Data) -> c_short {
+fn beacon_data_short(data: *mut Data) -> c_short {
     if data.is_null() {
         return 0;
     }
@@ -345,7 +344,7 @@ fn BeaconDataShort(data: *mut Data) -> c_short {
 }
 
 /// Extracts a 4-byte value from a Beacon `Data` buffer.
-fn BeaconDataInt(data: *mut Data) -> c_int {
+fn beacon_data_int(data: *mut Data) -> c_int {
     if data.is_null() {
         return 0;
     }
@@ -363,7 +362,7 @@ fn BeaconDataInt(data: *mut Data) -> c_int {
 }
 
 /// Extracts an arbitrary-length blob from a `Data` buffer.
-fn BeaconDataExtract(data: *mut Data, size: *mut c_int) -> *mut c_char {
+fn beacon_data_extract(data: *mut Data, size: *mut c_int) -> *mut c_char {
     if data.is_null() {
         return null_mut();
     }
@@ -391,7 +390,7 @@ fn BeaconDataExtract(data: *mut Data, size: *mut c_int) -> *mut c_char {
 }
 
 /// Initializes a `Data` parser over a raw buffer.
-fn BeaconDataParse(data: *mut Data, buffer: *mut c_char, size: c_int) {
+fn beacon_data_parse(data: *mut Data, buffer: *mut c_char, size: c_int) {
     if data.is_null() {
         return;
     }
@@ -405,7 +404,7 @@ fn BeaconDataParse(data: *mut Data, buffer: *mut c_char, size: c_int) {
 }
 
 /// Returns the remaining data length in a `Data` parser.
-fn BeaconDataLength(data: *const Data) -> c_int {
+fn beacon_data_length(data: *const Data) -> c_int {
     if data.is_null() {
         return 0;
     }
@@ -414,7 +413,7 @@ fn BeaconDataLength(data: *const Data) -> c_int {
 }
 
 /// Returns the collected Beacon output and size as raw bytes.
-fn BeaconGetOutputData(outsize: *mut c_int) -> *mut c_char {
+fn beacon_get_output_data(outsize: *mut c_int) -> *mut c_char {
     unsafe {
         let mut beacon = BEACON_BUFFER.lock();
         let (ptr, size) = beacon.get_output();
@@ -428,14 +427,14 @@ fn BeaconGetOutputData(outsize: *mut c_int) -> *mut c_char {
 }
 
 /// Appends raw output data into the Beacon output buffer.
-fn BeaconOutput(_type: c_int, data: *mut c_char, len: c_int) {
+fn beacon_output(_type: c_int, data: *mut c_char, len: c_int) {
     let mut buffer = BEACON_BUFFER.lock();
     buffer.append_char(data, len);
 }
 
 /// Formats a string using Beacon’s printf mechanism and stores it.
 #[unsafe(no_mangle)]
-unsafe extern "C" fn BeaconPrintf(_type: c_int, fmt: *mut c_char, mut args: ...) {
+unsafe extern "C" fn beacon_printf(_type: c_int, fmt: *mut c_char, mut args: ...) {
     let mut str = String::new();
     printf_compat::format(fmt, args.as_va_list(), printf_compat::output::fmt_write(&mut str));
     str.push('\0');
@@ -445,7 +444,7 @@ unsafe extern "C" fn BeaconPrintf(_type: c_int, fmt: *mut c_char, mut args: ...)
 }
 
 /// Reverts any impersonated token back to the original process token.
-fn BeaconRevertToken() {
+fn beacon_rever_token() {
     unsafe {
         if RevertToSelf() == 0 {
             log::warn!("RevertToSelf Failed!")
@@ -454,12 +453,12 @@ fn BeaconRevertToken() {
 }
 
 /// Applies a token to the current thread.
-fn BeaconUseToken(token: HANDLE) -> i32 {
+fn beacon_use_token(token: HANDLE) -> i32 {
     unsafe { SetThreadToken(null_mut(), token) }
 }
 
 /// Closes handles associated with a spawned process.
-fn BeaconCleanupProcess(info: *const PROCESS_INFORMATION) {
+fn beacon_cleanup_process(info: *const PROCESS_INFORMATION) {
     unsafe {
         CloseHandle((*info).hProcess);
         CloseHandle((*info).hThread);
@@ -467,7 +466,7 @@ fn BeaconCleanupProcess(info: *const PROCESS_INFORMATION) {
 }
 
 /// Checks whether the current process is elevated (admin token).
-fn BeaconIsAdmin() -> u32 {
+fn beacon_is_admin() -> u32 {
     let mut h_token = null_mut();
 
     unsafe {
@@ -504,7 +503,7 @@ fn swap_endianness(src: u32) -> u32 {
 }
 
 /// Converts a C-string to UTF-16 and writes it into the destination buffer.
-fn toWideChar(src: *const c_char, dst: *mut u16, max: c_int) -> c_int {
+fn to_wide_char(src: *const c_char, dst: *mut u16, max: c_int) -> c_int {
     if src.is_null() || dst.is_null() || max < size_of::<u16>() as c_int {
         return 0;
     }
@@ -536,7 +535,7 @@ fn toWideChar(src: *const c_char, dst: *mut u16, max: c_int) -> c_int {
 }
 
 /// Performs remote process injection into a target process via NT syscalls.
-fn BeaconInjectProcess(
+fn beacon_inject_process(
     _h_process: HANDLE, 
     pid: c_int, 
     payload: *const c_char, 
@@ -613,7 +612,7 @@ fn BeaconInjectProcess(
 }
 
 /// Extracts a pointer to a region of the `Data` buffer.
-fn BeaconDataPtr(data: *mut Data, size: c_int) -> *mut c_char {
+fn beacon_data_ptr(data: *mut Data, size: c_int) -> *mut c_char {
     if data.is_null() || size <= 0 {
         return null_mut();
     }
@@ -631,7 +630,7 @@ fn BeaconDataPtr(data: *mut Data, size: c_int) -> *mut c_char {
 }
 
 /// Leaving this to be implemented by people needing/wanting it
-fn BeaconInjectTemporaryProcess(
+fn beacon_inject_temporary_process(
     _info: *const PROCESS_INFORMATION,
     _payload: *const c_char,
     _len: c_int,
@@ -643,7 +642,7 @@ fn BeaconInjectTemporaryProcess(
 }
 
 /// Leaving this to be implemented by people needing/wanting it
-fn BeaconSpawnTemporaryProcess(
+fn beacon_spawn_temporary_process(
     _x86: i32, 
     _ignore_token: i32, 
     _s_info: *mut STARTUPINFOA, 
@@ -653,6 +652,6 @@ fn BeaconSpawnTemporaryProcess(
 }
 
 /// Leaving this to be implemented by people needing/wanting it
-fn BeaconGetSpawnTo(_x86: i32, _buffer: *const c_char, _length: c_int) {
+fn beacon_get_spawn_to(_x86: i32, _buffer: *const c_char, _length: c_int) {
     unimplemented!()
 }

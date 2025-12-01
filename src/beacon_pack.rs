@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use binrw::io::Write;
 use hex::FromHex;
-use super::error::Result;
+use crate::error::Result;
 
 /// Buffer used to build Beacon-compatible packed arguments.
 ///

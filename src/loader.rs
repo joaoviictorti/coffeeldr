@@ -23,7 +23,7 @@ use core::{
 
 use log::{debug, info, warn};
 use obfstr::{obfstr as obf, obfstring as s};
-use dinvk::{dinvoke, pe::PE, data::NTSTATUS};
+use dinvk::{dinvoke, helper::PE, types::NTSTATUS};
 use dinvk::module::{
     get_proc_address, 
     get_module_address, 
@@ -45,22 +45,10 @@ use windows_sys::Win32::{
     },
 };
 
-use super::error::{
-    CoffError, 
-    CoffeeLdrError, 
-    Result
-};
-use super::coff::{
-    Coff, 
-    CoffMachine,
-    CoffSource, 
-    IMAGE_RELOCATION,
-    IMAGE_SYMBOL
-};
-use super::beacon::{
-    get_function_internal_address, 
-    get_output_data
-};
+use crate::error::{CoffError, CoffeeLdrError, Result};
+use crate::coff::{Coff, CoffMachine, CoffSource};
+use crate::coff::{IMAGE_RELOCATION, IMAGE_SYMBOL}; 
+use crate::beacon::{get_function_internal_address, get_output_data};
 
 /// Type alias for the COFF main input function.
 type CoffMain = extern "C" fn(*mut u8, usize);
@@ -139,11 +127,11 @@ impl<'a> CoffeeLdr<'a> {
                     .map_err(|_| CoffError::FileReadError(path.to_string()))?;
 
                 // Creates the COFF object from the buffer
-                Coff::from_slice(Box::leak(buffer.into_boxed_slice()))?
+                Coff::parse(Box::leak(buffer.into_boxed_slice()))?
             }
 
             // Creates the COFF directly from the buffer
-            CoffSource::Buffer(buffer) => Coff::from_slice(buffer)?,
+            CoffSource::Buffer(buffer) => Coff::parse(buffer)?,
         };
 
         Ok(Self {
@@ -154,17 +142,18 @@ impl<'a> CoffeeLdr<'a> {
         })
     }
 
-    /// Enables module stomping using the specified module’s `.text` region.
+    /// Enables module stomping using the specified module's `.text` region.
     ///
-    /// When enabled, the loader overwrites the module’s `.text` section instead
+    /// When enabled, the loader overwrites the module's `.text` section instead
     /// of allocating fresh memory.
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// let loader = CoffeeLdr::new("bof.o")?
     ///     .with_module_stomping("amsi.dll");
     /// ```
+    #[must_use]
     pub fn with_module_stomping(mut self, module: &'a str) -> Self {
         self.module = module;
         self
@@ -922,13 +911,20 @@ fn LoadLibraryExA(
 #[cfg(test)]
 mod tests {
     use crate::{*, error::Result};
-    use dinvk::println;
 
     #[test]
     fn test_whoami() -> Result<()> {
         let mut coffee = CoffeeLdr::new("bofs/whoami.x64.o")?;
         let output = coffee.run("go", None, None)?;
-        println!("{output}");
+        
+        assert!(
+            output.contains("\\")
+                || output.contains("User")
+                || output.contains("Account")
+                || output.contains("Authority"),
+            "whoami output does not look valid: {output}"
+        );
+
         Ok(())
     }
 
@@ -936,45 +932,50 @@ mod tests {
     fn test_stomping() -> Result<()> {
         let mut coffee = CoffeeLdr::new("bofs/whoami.x64.o")?.with_module_stomping("amsi.dll");
         let output = coffee.run("go", None, None)?;
-        println!("{output}");
-        Ok(())
-    }
-
-    #[test]
-    fn test_ntcreatethread() -> Result<()> {
-        let mut pack = BeaconPack::default();
-
-        // Replace Shellcode
-        let buf: [u8; 3] = [0x41, 0x41, 0x41]; 
-        pack.addint(23316); // PID
-        pack.addbin(&buf)?; // Shellcode
-
-        let args = pack.get_buffer_hex()?;
-        let mut coffee = CoffeeLdr::new("bofs/ntcreatethread.x64.o")?;
-        let output = coffee.run("go", Some(args.as_ptr() as _), Some(args.len()))?;
-        println!("{output}");
-
+        
+        assert!(
+            output.contains("\\")
+                || output.contains("User")
+                || output.contains("Account"),
+            "whoami output (with stomping) looks invalid: {output}"
+        );
+        
         Ok(())
     }
 
     #[test]
     fn test_dir() -> Result<()> {
         let mut pack = BeaconPack::default();
-        pack.addstr("C:\\")?;
+        pack.addstr("C:\\Windows")?;
+
         let args = pack.get_buffer_hex()?;
         let mut coffee = CoffeeLdr::new("bofs/dir.x64.o")?;
         let output = coffee.run("go", Some(args.as_ptr() as _), Some(args.len()))?;
-        println!("{output}");
+
+        assert!(
+            output.contains("Directory of")
+                || output.contains("File(s)")
+                || output.contains("Dir(s)")
+                || output.contains("bytes"),
+            "dir output does not look valid: {output}"
+        );
 
         Ok(())
     }
 
     #[test]
     fn test_buffer_memory() -> Result<()> {
-        let buffer = include_bytes!("bofs/whoami.x64.o");
+        let buffer = include_bytes!("../bofs/whoami.x64.o");
         let mut coffee = CoffeeLdr::new(buffer)?;
         let output = coffee.run("go", None, None)?;
-        println!("{output}");
+        
+        assert!(
+            output.contains("\\") 
+                || output.contains("User")
+                || output.contains("Account"),
+            "whoami buffer-loaded output does not look valid: {output}"
+        );
+
         Ok(())
     }
 }

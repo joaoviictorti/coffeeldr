@@ -10,10 +10,7 @@ use log::{debug, warn};
 use binrw::{BinRead, binread};
 use binrw::io::Cursor;
 
-use super::error::{
-    CoffError,
-    CoffeeLdrError
-};
+use crate::error::{CoffError, CoffeeLdrError};
 
 // Architecture definitions for x64
 const COFF_MACHINE_X64: u16 = 0x8664;
@@ -65,20 +62,7 @@ impl<'a> Coff<'a> {
     ///
     /// Fails when the file is too small, the header is invalid, the
     /// architecture is unsupported, or any section or symbol fails to decode.
-    pub fn from_slice(buffer: &'a [u8]) -> Result<Self, CoffError> {
-        Self::parse(buffer)
-    }
-
-    /// Internal parser for COFF structures.
-    ///
-    /// Reads the file header, determines the architecture, loads the
-    /// symbol table and section table, and constructs a `Coff` instance
-    /// referencing the original buffer.
-    ///
-    /// # Errors
-    ///
-    /// Fails if any field is malformed or exceeds allowable limits.
-    fn parse(buffer: &'a [u8]) -> Result<Self, CoffError> {
+    pub fn parse(buffer: &'a [u8]) -> Result<Self, CoffError> {
         debug!("Parsing COFF file header, buffer size: {}", buffer.len());
 
         // Validates that the file has the minimum size to contain a COFF header
