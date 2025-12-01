@@ -1,4 +1,4 @@
-# coffeeldr 🦀 
+# coffeeldr
 
 ![Rust](https://img.shields.io/badge/made%20with-Rust-red)
 ![crate](https://img.shields.io/crates/v/coffeeldr.svg)
@@ -23,7 +23,7 @@ A modern and lightweight COFF (Common Object File Format) loader for Windows wri
 
 Add `coffeeldr` to your project by updating your `Cargo.toml`:
 
-```powershell
+```bash
 cargo add coffeeldr
 ```
 
@@ -49,8 +49,6 @@ match loader {
 
 To load a COFF from an in-memory buffer:
 ```rust
-use coffeeldr::CoffeeLdr;
-
 let coff_data = include_bytes!("path/to/coff_file.o");
 let mut loader = CoffeeLdr::new(coff_data);
 match loader {
