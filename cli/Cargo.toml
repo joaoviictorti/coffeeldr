@@ -1,18 +1,12 @@
 [package]
-name = "coffee"
+name = "coff"
 version = "0.2.0"
 edition = "2024"
 
-[profile.release]
-strip = "debuginfo"
-codegen-units = 1
-opt-level = "z"
-lto = true
-
 [dependencies]
+log = "0.4.29"
 base64 = "0.22.1"
-clap = { version = "4.5.19", features = ["derive"] }
+env_logger = "0.11.8"
 clap-verbosity-flag = "3.0.4"
 coffeeldr = { path = "../" }
-env_logger = "0.11.5"
-log = "0.4.22"
+clap = { version = "4.5.56", features = ["derive"] }

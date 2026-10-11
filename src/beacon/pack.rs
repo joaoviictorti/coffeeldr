@@ -1,26 +1,49 @@
 use alloc::vec::Vec;
+
 use binrw::io::Write;
 use hex::FromHex;
+
 use crate::error::Result;
 
-/// Buffer used to build Beacon-compatible packed arguments.
+/// Builds a Beacon-compatible argument buffer.
 ///
-/// The buffer keeps track of the total payload size and exposes helpers
-/// for appending integers, strings, wide strings and raw binary data.
-#[derive(Default)]
+/// The buffer tracks the total payload size and provides helpers for
+/// appending integers, strings, wide strings and raw binary data. Use
+/// [`getbuffer`](Self::getbuffer) to retrieve the final packed payload.
+///
+/// # Examples
+///
+/// ```
+/// use coffeeldr::BeaconPack;
+///
+/// let mut pack = BeaconPack::default();
+/// pack.addint(42);
+/// pack.addstr("hello")?;
+///
+/// let buf = pack.getbuffer()?;
+/// # Ok::<(), coffeeldr::error::Error>(())
+/// ```
+#[derive(Default, Debug)]
 pub struct BeaconPack {
-    /// Internal byte buffer backing this pack.
     buffer: Vec<u8>,
-
-    /// Logical size of the packed payload (excluding the size prefix).
     size: u32,
 }
 
 impl BeaconPack {
-    /// Returns a copy of the packed buffer with the size prefix prepended.
+    /// Returns a copy of the packed buffer with a 4-byte size prefix.
     ///
-    /// The resulting vector starts with a 4-byte little-endian length field,
-    /// followed by the raw payload accumulated so far.
+    /// # Examples
+    ///
+    /// ```
+    /// use coffeeldr::BeaconPack;
+    ///
+    /// let mut pack = BeaconPack::default();
+    /// pack.addint(100);
+    ///
+    /// let buf = pack.getbuffer()?;
+    /// assert_eq!(buf.len(), 8); // 4-byte size + 4-byte int
+    /// # Ok::<(), coffeeldr::error::Error>(())
+    /// ```
     pub fn getbuffer(&self) -> Result<Vec<u8>> {
         let mut buf = Vec::with_capacity(4 + self.buffer.len());
         buf.extend_from_slice(&self.size.to_le_bytes());
@@ -31,40 +54,63 @@ impl BeaconPack {
 
     /// Returns the packed buffer encoded as hexadecimal bytes.
     ///
-    /// The packed payload (including the size prefix) is hex-encoded and
-    /// the resulting ASCII representation is returned as a byte vector.
+    /// # Examples
     ///
-    /// # Errors
+    /// ```
+    /// use coffeeldr::BeaconPack;
     ///
-    /// Propagates any error produced during hex conversion.
+    /// let mut pack = BeaconPack::default();
+    /// pack.addint(0x41);
+    ///
+    /// let hex_buf = pack.get_buffer_hex()?;
+    /// # Ok::<(), coffeeldr::error::Error>(())
+    /// ```
     pub fn get_buffer_hex(&self) -> Result<Vec<u8>> {
         let buf = self.getbuffer()?;
         Ok(Vec::from_hex(hex::encode(&buf))?)
     }
 
-    /// Appends a 2-byte signed integer to the buffer.
+    /// Appends a 2-byte signed integer in little-endian format.
     ///
-    /// The value is written in little-endian format and the tracked size
-    /// is increased accordingly.
+    /// # Examples
+    ///
+    /// ```
+    /// use coffeeldr::BeaconPack;
+    ///
+    /// let mut pack = BeaconPack::default();
+    /// pack.addshort(1024);
+    /// ```
     pub fn addshort(&mut self, short: i16) {
         self.write_i16(short);
         self.size += 2;
     }
 
-    /// Appends a 4-byte signed integer to the buffer.
+    /// Appends a 4-byte signed integer in little-endian format.
     ///
-    /// The value is written in little-endian format and the tracked size
-    /// is increased accordingly.
+    /// # Examples
+    ///
+    /// ```
+    /// use coffeeldr::BeaconPack;
+    ///
+    /// let mut pack = BeaconPack::default();
+    /// pack.addint(42);
+    /// ```
     pub fn addint(&mut self, int: i32) {
         self.write_i32(int);
         self.size += 4;
     }
 
-    /// Appends a UTF-8 string with a length prefix and null terminator.
+    /// Appends a NUL-terminated UTF-8 string with a length prefix.
     ///
-    /// # Errors
+    /// # Examples
     ///
-    /// Propagates any error produced while writing into the internal buffer.
+    /// ```
+    /// use coffeeldr::BeaconPack;
+    ///
+    /// let mut pack = BeaconPack::default();
+    /// pack.addstr("C:\\Windows")?;
+    /// # Ok::<(), coffeeldr::error::Error>(())
+    /// ```
     pub fn addstr(&mut self, s: &str) -> Result<()> {
         let s_bytes = s.as_bytes();
         let length = s_bytes.len() as u32 + 1;
@@ -78,11 +124,16 @@ impl BeaconPack {
         Ok(())
     }
 
-    /// Appends a UTF-16LE wide string with a length prefix and null terminator.
+    /// Appends a NUL-terminated UTF-16LE wide string with a length prefix.
     ///
-    /// # Errors
+    /// # Examples
     ///
-    /// Propagates any error produced while writing into the internal buffer.
+    /// ```
+    /// use coffeeldr::BeaconPack;
+    ///
+    /// let mut pack = BeaconPack::default();
+    /// pack.addwstr("C:\\Windows");
+    /// ```
     pub fn addwstr(&mut self, s: &str) {
         let s_wide: Vec<u16> = s.encode_utf16().collect();
         let length = (s_wide.len() as u32 * 2) + 2;
@@ -98,9 +149,15 @@ impl BeaconPack {
 
     /// Appends a raw binary blob with a length prefix.
     ///
-    /// # Errors
+    /// # Examples
     ///
-    /// Propagates any error produced while writing into the internal buffer.
+    /// ```
+    /// use coffeeldr::BeaconPack;
+    ///
+    /// let mut pack = BeaconPack::default();
+    /// pack.addbin(&[0xDE, 0xAD, 0xBE, 0xEF])?;
+    /// # Ok::<(), coffeeldr::error::Error>(())
+    /// ```
     pub fn addbin(&mut self, data: &[u8]) -> Result<()> {
         let length = data.len() as u32;
         self.write_u32(length);
@@ -109,14 +166,26 @@ impl BeaconPack {
         Ok(())
     }
 
-    /// Clears the internal buffer and resets the tracked size.
+    /// Clears the buffer and resets the size counter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use coffeeldr::BeaconPack;
+    ///
+    /// let mut pack = BeaconPack::default();
+    /// pack.addint(42);
+    /// pack.reset();
+    ///
+    /// let buf = pack.getbuffer()?;
+    /// assert_eq!(buf.len(), 4); // only the size prefix remains
+    /// # Ok::<(), coffeeldr::error::Error>(())
+    /// ```
     pub fn reset(&mut self) {
         self.buffer.clear();
         self.size = 0;
     }
-}
 
-impl BeaconPack {
     /// Writes a single byte to the buffer.
     fn write_u8(&mut self, value: u8) {
         self.buffer.extend_from_slice(&value.to_le_bytes());

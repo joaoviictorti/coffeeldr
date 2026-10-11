@@ -1,27 +1,15 @@
 # coffeeldr
 
-![Rust](https://img.shields.io/badge/made%20with-Rust-red)
-![crate](https://img.shields.io/crates/v/coffeeldr.svg)
-![docs](https://docs.rs/coffeeldr/badge.svg)
-![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-brightgreen)
-[![Actions status](https://github.com/joaoviictorti/coffeeldr/actions/workflows/ci.yml/badge.svg)](https://github.com/joaoviictorti/coffeeldr/actions)
+[![crate][crate-image]][crate-link]
+[![Docs][docs-image]][docs-link]
+[![Build Status][build-image]][build-link]
+![Apache2/MIT licensed][license-image]
 
-A modern and lightweight COFF (Common Object File Format) loader for Windows written in Rust, designed to run COFF files on Windows. It supports both 32-bit and 64-bit architectures and allows you to load and execute COFF files from files or memory buffers with Rust’s safety and performance guarantees.
-
-## Features
-
-- ✅ Supports `#[no_std]` environments (with `alloc`).
-- ✅ Load COFF files from disk or in-memory buffers.
-- ✅ Load COFF files with module stomping.
-- ✅ Compatible with `x64` and `x86` architectures.
-- ✅ Memory management: Automatically adjusts memory protections to ensure execution (read, write, execute permissions).
-- ✅ Dynamic relocation handling.
-- ✅ Fully written in Rust with safety and performance in mind.
-- ✅ Easy CLI integration with flexible input handling.
+A COFF loader written in Rust, designed to run COFF files on Windows.
 
 ## Getting started
 
-Add `coffeeldr` to your project by updating your `Cargo.toml`:
+Add `coffeeldr` to your project:
 
 ```bash
 cargo add coffeeldr
@@ -29,109 +17,18 @@ cargo add coffeeldr
 
 ## Usage
 
-### Loading from File
+### Running COFF File
 
-To load a COFF file from the filesystem:
+To load and execute a COFF file from the filesystem:
 ```rust
-use coffeeldr::CoffeeLdr;
+use coffeeldr::CoffLdr;
 
-let mut loader = CoffeeLdr::new("path/to/coff_file.o");
-match loader {
-    Ok(ldr) => {
-        println!("COFF successfully loaded from file!");
-        // Execute the entry point or manipulate the COFF as needed
-    },
-    Err(e) => println!("Error loading COFF: {:?}", e),
-}
+let mut loader = CoffLdr::new("whoami.o").expect("Failed to load COFF from file");
+let output = loader.run("go", None, None).expect("Failed to execute COFF");
+println!("{output}");
 ```
 
-### Loading from Buffer
-
-To load a COFF from an in-memory buffer:
-```rust
-let coff_data = include_bytes!("path/to/coff_file.o");
-let mut loader = CoffeeLdr::new(coff_data);
-match loader {
-    Ok(ldr) => {
-        println!("COFF successfully loaded from buffer!");
-        // Execute the entry point or manipulate the COFF as needed
-    },
-    Err(e) => println!("Error loading COFF: {:?}", e),
-}
-```
-
-### Executing a COFF File
-
-Once the COFF file is loaded, you can execute it by specifying the entry point:
-```rust
-let mut coffee = CoffeeLdr::new("path/to/coff_file.o").unwrap();
-coffee.run("entry_point_function_name", None, None).unwrap();
-```
-
-### Using Module Stomping
-
-Module stomping replaces the `.text` section of a loaded module with the COFF code.
-```rust
-let mut coffee = CoffeeLdr::new("path/to/coff_file.o")?
-    .with_module_stomping("xpsservices.dll"); // specify the module to stomp
-
-coffee.run("go", None, None)?;
-```
-
-## CLI
-
-`coffeeldr` also provides a convenient CLI tool for interacting with COFF files directly from the command line.
-
-Example Command:
-```cmd
-coffee.exe --bof path/to/coff_file.o --entrypoint go
-```
-
-### Input Processing in CLI
-
-These are the types of parameters that the tool accepts for processing:
-
-- `/short:<value>`: Adds a short (`i16`) value.
-- `/int:<value>`: Adds an integer (`i32`) value.
-- `/str:<value>`: Adds a string.
-- `/wstr:<value>`: Adds a wide string.
-- `/bin:<base64-data>`: Adds binary data decoded from `base64`.
-
-Example command using [`ntcreatethread.o`](https://github.com/trustedsec/CS-Remote-OPs-BOF/blob/main/Injection/ntcreatethread/ntcreatethread.x64.o):
-```cmd
-coffee.exe --bof ntcreatethread.o -e go /int:4732 /bin:Y29mZmVlbGRy..
-```
-
-Another example using [`dir.o`](https://github.com/trustedsec/CS-Situational-Awareness-BOF/blob/master/SA/dir/dir.x64.o):
-```cmd
-coffee.exe --bof dir.o -e go /str:C:\
-```
-
-### Using Module Stomping via CLI
-
-When using the `--stomping <module>` flag, coffeeldr will identify the `.text` section of the specified module and overwrite its contents with the loaded COFF payload
-
-```cmd
-coffee.exe --bof whoami.o -e go --stomping xpsservices.dll
-```
-
-### CLI Help
-
-```text
-A COFF (Common Object File Format) loader written in Rust
-
-Usage: coffee.exe [OPTIONS] --bof <BOF> [INPUTS]...
-
-Arguments:
-  [INPUTS]...  Multiple arguments in the format `/short:<value>`, `/int:<value>`, `/str:<value>`, `/wstr:<value>`, `/bin:<base64-data>`
-
-Options:
-  -b, --bof <BOF>                The command to be executed
-  -e, --entrypoint <ENTRYPOINT>  Entrypoint to use in the execution [default: go]
-      --stomping <STOMPING>      Enables module stomping (e.g., --stomping xpsservices.dll)
-  -v, --verbose...               Verbose mode (-v, -vv, -vvv, etc.)
-  -h, --help                     Print help
-```
+For more information, including a more detailed overview of coffeeldr, [visit the documentation](https://docs.rs/coffeeldr).
 
 ## References
 
@@ -154,3 +51,13 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in coffeeldr
 by you, as defined in the Apache-2.0 license, shall be dually licensed as above, without any
 additional terms or conditions.
+
+[//]: # (badges)
+
+[crate-image]: https://img.shields.io/crates/v/coffeeldr?logo=rust
+[crate-link]: https://crates.io/crates/coffeeldr
+[docs-image]: https://docs.rs/coffeeldr/badge.svg
+[docs-link]: https://docs.rs/coffeeldr/
+[build-image]: https://github.com/joaoviictorti/coffeeldr/actions/workflows/ci.yml/badge.svg
+[build-link]: https://github.com/joaoviictorti/coffeeldr/actions/workflows/ci.yml
+[license-image]: https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg

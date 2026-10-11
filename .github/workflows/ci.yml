@@ -1,47 +1,46 @@
-name: build
+name: CI
 
 on: [push, pull_request]
 
 jobs:
-  clippy:
-    # Runs Clippy to check for lints in the Rust code
-    name: Clippy Lint Check
+  check:
+    name: Lint, test and docs
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Rust
-        run: |
-          rustup default stable
-          rustup component add clippy
+      - name: Install Clippy
+        run: rustup component add clippy
 
       - name: Run Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
-  doc:
-    # Builds project documentation, including private items
-    name: Docs Check
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
+      - name: Run tests
+        run: cargo test --workspace --locked
 
       - name: Check docs
-        run: cargo doc --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --document-private-items --locked
 
-  cli-build:
-    # Builds the CLI binary located in the `cli` folder using release profile
-    name: Build CLI
+      - name: Check package
+        run: cargo package --locked
+
+  build:
+    name: Build ${{ matrix.target }}
     runs-on: windows-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-pc-windows-msvc
+          - i686-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Rust
-        run: rustup default stable
+      - name: Install target
+        run: rustup target add ${{ matrix.target }}
 
-      - name: Build CLI release
-        run: |
-          cd cli
-          cargo build --release
+      - name: Build release
+        run: cargo build --workspace --release --locked --target ${{ matrix.target }}

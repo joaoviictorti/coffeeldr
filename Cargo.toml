@@ -1,49 +1,49 @@
 [package]
 name = "coffeeldr"
-version = "0.3.4"
+version = "0.4.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 authors = ["João Victor"]
-description = "A COFF (Common Object File Format) loader written in Rust"
+description = "A COFF loader written in Rust"
 repository = "https://github.com/joaoviictorti/coffeeldr"
 homepage = "https://github.com/joaoviictorti/coffeeldr"
 documentation = "https://docs.rs/coffeeldr/latest"
 keywords = ["coff", "loader", "windows", "rust", "redteam"]
 categories = ["os", "security"]
-include = [
-    "src/**",
-    "Cargo.toml",
-    "README.md",
-    "LICENSE",
-]
-
-[lib]
-doctest = false
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
 
 [dependencies]
-log = "0.4.22"
+log = "0.4.29"
 obfstr = "0.4.4"
-dinvk = "0.4.2"
-binrw = { version = "0.15.0", default-features = false }
-spin = { version = "0.10.0", default-features = false }
-thiserror = { version = "2.0.12", default-features = false }
-hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
-printf-compat = { version = "0.2.0", default-features = false }
+dinvk = "0.5.0"
+pelite = { version = "0.10.0", default-features = false }
+windows-targets = "0.53.5"
+binrw = { version = "0.15", default-features = false }
+spin = { version = "0.12.3", default-features = false, features = ["mutex", "spin_mutex"] }
+thiserror = { version = "2.0", default-features = false }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+printf-compat = { version = "0.3.1", default-features = false }
 
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59.0", features = [
-    "Win32_System_Diagnostics_Debug", 
-    "Win32_System_LibraryLoader", 
-    "Win32_System_Memory",  
-    "Win32_System_SystemServices", 
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.61"
+features = [
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_SystemServices",
     "Win32_System_Threading",
     "Win32_Security",
     "Win32_Storage_FileSystem",
     "Win32_System_IO",
-    "Win32_System_WindowsProgramming"
-]}
+    "Win32_System_WindowsProgramming",
+    "Wdk_Foundation",
+]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"
 targets = ["x86_64-pc-windows-gnu", "x86_64-pc-windows-msvc"]
+
+[workspace]
+resolver = "2"
+members = ["cli"]

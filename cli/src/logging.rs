@@ -2,7 +2,6 @@ use clap_verbosity_flag::Verbosity;
 use env_logger::Builder;
 use log::{Level, LevelFilter};
 
-/// Initializes the logger
 pub fn init_logger(verbosity: &Verbosity) {
     let level = verbosity
         .log_level()

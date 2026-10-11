@@ -1,3 +1,0 @@
-# Uses Rustfmt 2024 edition rules, but not all of them are enforced 100%.
-edition = "2024"
-style_edition = "2024"
