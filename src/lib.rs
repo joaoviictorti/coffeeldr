@@ -58,7 +58,7 @@
     html_favicon_url = "https://www.rust-lang.org/favicon.ico",
     html_root_url = "https://docs.rs/coffeeldr/latest"
 )]
-#![feature(c_variadic, core_intrinsics)]
+#![feature(core_intrinsics)]
 #![allow(internal_features)]
 
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]

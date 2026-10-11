@@ -7,7 +7,6 @@ readme = "README.md"
 authors = ["João Victor"]
 description = "A COFF loader written in Rust"
 repository = "https://github.com/joaoviictorti/coffeeldr"
-homepage = "https://github.com/joaoviictorti/coffeeldr"
 documentation = "https://docs.rs/coffeeldr/latest"
 keywords = ["coff", "loader", "windows", "rust", "redteam"]
 categories = ["os", "security"]
@@ -18,12 +17,11 @@ log = "0.4.29"
 obfstr = "0.4.4"
 dinvk = "0.5.0"
 pelite = { version = "0.10.0", default-features = false }
-windows-targets = "0.53.5"
 binrw = { version = "0.15", default-features = false }
 spin = { version = "0.12.3", default-features = false, features = ["mutex", "spin_mutex"] }
 thiserror = { version = "2.0", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
-printf-compat = { version = "0.3.1", default-features = false }
+printf-compat = { version = "0.5.0", default-features = false }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.61"
