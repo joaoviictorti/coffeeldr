@@ -8,7 +8,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Clippy
         run: rustup component add clippy
@@ -37,7 +37,7 @@ jobs:
           - i686-pc-windows-msvc
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install target
         run: rustup target add ${{ matrix.target }}
